@@ -22,12 +22,13 @@ Una aplicación Android moderna para gestionar tareas académicas con integraci�
 - Android Studio Hedgehog (2023.1.1+)
 - JDK 11+
 - Dispositivo/Emulador Android API 24+
+- Git configurado con tu cuenta de GitHub
 
 ### Pasos
 1. **Clonar el repositorio**
    ```bash
-   git clone [URL_DEL_REPOSITORIO]
-   cd Android
+   git clone https://github.com/[TU_USUARIO]/RecordatorioModelo2.git
+   cd RecordatorioModelo2
    ```
 
 2. **Configurar Google Services**
@@ -38,6 +39,121 @@ Una aplicación Android moderna para gestionar tareas académicas con integraci�
    - Abrir proyecto en Android Studio
    - Sincronizar Gradle
    - Presionar ▶️ Run
+
+## 👥 Flujo de Trabajo para el Equipo
+
+### 🔒 Protección de la Rama Principal
+Este repositorio tiene configurada la **protección de la rama `main`** con las siguientes reglas:
+- ❌ **No se permiten pushes directos** a `main`
+- ✅ **Obligatorio crear Pull Requests** para todos los cambios
+- 👥 **Requiere al menos 1 aprobación** antes del merge
+- 🔄 **La rama debe estar actualizada** antes del merge
+- 💬 **Todos los comentarios deben resolverse** antes del merge
+
+### 🛠️ Proceso de Desarrollo
+
+#### 1. Configuración Inicial (Solo la primera vez)
+```bash
+# Clonar el repositorio
+git clone https://github.com/[TU_USUARIO]/RecordatorioModelo2.git
+cd RecordatorioModelo2
+
+# Configurar tu información (si no lo has hecho)
+git config user.name "Tu Nombre"
+git config user.email "tu.email@ejemplo.com"
+```
+
+#### 2. Para Cada Nueva Funcionalidad
+```bash
+# 1. Asegúrate de estar en main y actualizado
+git checkout main
+git pull origin main
+
+# 2. Crear una nueva rama para tu funcionalidad
+git checkout -b feature/nombre-de-tu-funcionalidad
+# Ejemplos:
+# git checkout -b feature/login-improvements
+# git checkout -b feature/notification-system
+# git checkout -b bugfix/classroom-sync-error
+
+# 3. Realizar tus cambios y commits
+git add .
+git commit -m "Descripción clara de los cambios"
+
+# 4. Subir tu rama al repositorio
+git push origin feature/nombre-de-tu-funcionalidad
+```
+
+#### 3. Crear Pull Request
+1. Ve a GitHub.com y navega al repositorio
+2. Verás un botón **"Compare & pull request"** - haz clic
+3. Completa la información:
+   - **Título**: Descripción clara de los cambios
+   - **Descripción**: Explica qué cambios hiciste y por qué
+   - **Reviewers**: Asigna a otros miembros del equipo
+4. Haz clic en **"Create pull request"**
+
+#### 4. Revisión y Merge
+- Los miembros del equipo revisarán tu código
+- Responde a comentarios y realiza cambios si es necesario
+- Una vez aprobado, el PR se puede hacer merge a `main`
+
+### 📋 Convenciones del Equipo
+
+#### Nombres de Ramas
+- `feature/descripcion-funcionalidad` - Para nuevas funcionalidades
+- `bugfix/descripcion-error` - Para corrección de errores
+- `hotfix/descripcion-urgente` - Para correcciones urgentes
+- `refactor/descripcion-mejora` - Para refactorización de código
+
+#### Mensajes de Commit
+```bash
+# Formato recomendado:
+# tipo: descripción breve
+
+# Ejemplos:
+git commit -m "feat: agregar autenticación con Google"
+git commit -m "fix: corregir error en sincronización de tareas"
+git commit -m "refactor: separar componentes de navegación"
+git commit -m "docs: actualizar README con instrucciones"
+```
+
+#### Tipos de Commit
+- `feat:` - Nueva funcionalidad
+- `fix:` - Corrección de errores
+- `refactor:` - Refactorización de código
+- `docs:` - Cambios en documentación
+- `style:` - Cambios de formato (espacios, etc.)
+- `test:` - Agregar o modificar tests
+
+### 🚨 Reglas Importantes
+1. **NUNCA** hagas push directo a `main`
+2. **SIEMPRE** crea una rama para tus cambios
+3. **SIEMPRE** crea un Pull Request
+4. **REVISA** el código de tus compañeros
+5. **MANTÉN** tus ramas actualizadas con `main`
+6. **ELIMINA** las ramas después del merge
+
+### 🔧 Comandos Útiles
+```bash
+# Ver el estado actual
+git status
+
+# Ver todas las ramas
+git branch -a
+
+# Cambiar a main y actualizar
+git checkout main && git pull origin main
+
+# Eliminar rama local después del merge
+git branch -d feature/nombre-rama
+
+# Ver historial de commits
+git log --oneline
+
+# Deshacer último commit (mantener cambios)
+git reset --soft HEAD~1
+```
 
 ## 📱 Capturas de Pantalla
 
@@ -122,4 +238,4 @@ Desarrollado como proyecto de curso de desarrollo Android.
 
 ---
 
-**Nota**: Requiere conexión a internet para la integración con Google Classroom. 
+**Nota**: Requiere conexión a internet para la integración con Google Classroom.
