@@ -1,0 +1,210 @@
+============================
+RESUMEN DEL PROYECTO
+============================
+
+Nombre del proyecto: RecordatorioModelo2 (Android)
+
+----------------------------------------
+1. CONTEXTO Y OBJETIVO
+----------------------------------------
+Aplicación Android para gestión de tareas académicas con integración con Google Classroom, autenticación local y con Google, y manejo de perfil de usuario. Arquitectura MVVM, Jetpack Compose, Room, y consumo de APIs de Google.
+
+----------------------------------------
+2. ARQUITECTURA Y TECNOLOGÍAS
+----------------------------------------
+- **Arquitectura**: MVVM (Model-View-ViewModel)
+- **UI Framework**: Jetpack Compose con Material 3
+- **Base de Datos**: Room con Kotlin Coroutines y Flow
+- **Navegación**: Navigation Compose
+- **Autenticación**: Google Sign-In API
+- **APIs Externas**: Google Classroom API
+- **Notificaciones**: AlarmManager + BroadcastReceiver
+- **Lenguaje**: Kotlin
+- **Versión mínima**: API 24 (Android 7.0)
+- **Versión objetivo**: API 36 (Android 14)
+
+----------------------------------------
+3. ESTRUCTURA DEL PROYECTO
+----------------------------------------
+```
+app/src/main/java/com/example/recordatoriomodelo2/
+├── MainActivity.kt                    # Punto de entrada de la aplicación
+├── TaskReminderReceiver.kt           # Receptor de notificaciones
+├── data/local/
+│   ├── AppDatabase.kt                # Base de datos Room
+│   ├── TaskDao.kt                    # DAO para operaciones de BD
+│   └── TaskEntity.kt                 # Entidad de tarea
+├── ui/
+│   ├── AppNavigation.kt              # Navegación principal (1454 líneas)
+│   ├── TasksViewModel.kt             # ViewModel para tareas
+│   └── screens/login/
+│       ├── LoginScreen.kt            # Pantalla de login
+│       ├── LoginViewModel.kt         # ViewModel de login
+│       └── PruebaAuthScreen.kt       # Pantalla de prueba de auth
+```
+
+----------------------------------------
+4. FUNCIONALIDADES IMPLEMENTADAS
+----------------------------------------
+
+4.1 AUTENTICACIÓN
+- Login local con credenciales hardcodeadas (admin/1234)
+- Login con Google Sign-In
+- Selector de método de autenticación
+- Manejo de sesiones de Google
+
+4.2 GESTIÓN DE TAREAS
+- CRUD completo de tareas (Crear, Leer, Actualizar, Eliminar)
+- Campos: título, materia, fecha de vencimiento, recordatorio, estado completado
+- Ordenamiento por estado y fecha de creación
+- Colores cíclicos para las tarjetas de tareas
+- Validación de campos obligatorios
+
+4.3 INTEGRACIÓN CON GOOGLE CLASSROOM
+- Importación de cursos desde Google Classroom
+- Importación de tareas por curso
+- Deduplicación por classroomId
+- Formateo automático de fechas ISO a formato legible
+- Manejo de errores de API
+
+4.4 PERFIL DE USUARIO
+- Gestión de información personal (nombre, email, teléfono, institución)
+- Persistencia en memoria (estado global)
+- Validación básica de campos
+
+4.5 NOTIFICACIONES
+- Sistema de recordatorios con AlarmManager
+- Notificaciones push para tareas pendientes
+- Canal de notificaciones configurado
+- Integración con el sistema de notificaciones de Android
+
+4.6 INTERFAZ DE USUARIO
+- Diseño moderno con Material 3
+- Paleta de colores personalizada (rojo vibrante, azul marino)
+- Pantallas responsivas y accesibles
+- Estados vacíos y de carga
+- Diálogos de confirmación
+
+----------------------------------------
+5. PANTALLAS IMPLEMENTADAS
+----------------------------------------
+1. **SelectorAuthScreen**: Selección de método de autenticación
+2. **LoginScreen**: Login local tradicional
+3. **GoogleLoginScreen**: Login con Google + importación de Classroom
+4. **HomeScreen**: Dashboard principal con estadísticas y acciones
+5. **TasksScreen**: Lista de tareas con gestión completa
+6. **AddTaskScreen**: Creación/edición de tareas con selector de fecha/hora
+7. **ProfileScreen**: Gestión del perfil de usuario
+
+----------------------------------------
+6. BASE DE DATOS
+----------------------------------------
+- **Entidad**: TaskEntity con 8 campos
+- **Tabla**: tasks
+- **Campos**: id, title, subject, dueDate, isCompleted, createdAt, reminderAt, classroomId
+- **Operaciones**: CRUD completo, búsqueda por classroomId
+- **Ordenamiento**: Por fecha de vencimiento ascendente
+
+----------------------------------------
+7. DEPENDENCIAS PRINCIPALES
+----------------------------------------
+- androidx.compose.* (UI y navegación)
+- androidx.room.* (Base de datos)
+- androidx.lifecycle.* (ViewModel y estado)
+- com.google.android.gms:play-services-auth (Google Sign-In)
+- com.google.firebase:firebase-bom (Firebase)
+- kotlinx.coroutines (Programación asíncrona)
+
+----------------------------------------
+8. ESTADO ACTUAL
+----------------------------------------
+✅ **COMPLETADO**:
+- Autenticación local y con Google implementada
+- Integración completa con Google Classroom
+- UI/UX modernizada en todas las pantallas
+- Manejo de perfil de usuario
+- Deduplicación de tareas importadas
+- Sistema de notificaciones funcional
+- Navegación y flujo de pantallas completo
+- Formateo de fechas corregido
+- Comentarios en código clave
+
+----------------------------------------
+9. TAREAS PENDIENTES Y MEJORAS
+----------------------------------------
+
+9.1 VALIDACIONES Y SEGURIDAD
+- [ ] Mejorar validaciones de perfil de usuario (formato email, teléfono)
+- [ ] Implementar encriptación de datos sensibles
+- [ ] Agregar validación de permisos de notificaciones
+- [ ] Implementar logout seguro de Google
+
+9.2 EXPERIENCIA DE USUARIO
+- [ ] Mejorar feedback visual y mensajes de error
+- [ ] Agregar animaciones de transición
+- [ ] Implementar modo oscuro
+- [ ] Agregar búsqueda y filtros de tareas
+- [ ] Implementar ordenamiento personalizable
+
+9.3 FUNCIONALIDADES AVANZADAS
+- [ ] Sincronización automática con Classroom
+- [ ] Exportación de tareas
+- [ ] Estadísticas detalladas
+- [ ] Categorización de tareas
+- [ ] Recordatorios recurrentes
+- [ ] Backup y restauración de datos
+
+9.4 ARQUITECTURA Y CÓDIGO
+- [ ] Refactorizar AppNavigation.kt (1454 líneas es demasiado)
+- [ ] Implementar inyección de dependencias (Hilt)
+- [ ] Separar lógica de UI y negocio
+- [ ] Agregar tests unitarios y de UI
+- [ ] Implementar manejo de errores global
+- [ ] Optimizar consultas de base de datos
+
+9.5 PERSISTENCIA Y ESTADO
+- [ ] Migrar perfil de usuario a base de datos
+- [ ] Implementar DataStore para preferencias
+- [ ] Agregar backup en la nube
+- [ ] Sincronización offline/online
+
+9.6 DOCUMENTACIÓN Y DESPLIEGUE
+- [ ] Documentar librerías y justificar elecciones
+- [ ] Preparar documentación final
+- [ ] Crear video de sustentación
+- [ ] Preparar APK para distribución
+- [ ] Configurar ProGuard para release
+
+----------------------------------------
+10. PROBLEMAS CONOCIDOS
+----------------------------------------
+- AppNavigation.kt es muy extenso (1454 líneas) - necesita refactorización
+- Perfil de usuario solo persiste en memoria
+- Validaciones básicas en formularios
+- No hay manejo de errores de red robusto
+- Falta de tests automatizados
+- Credenciales hardcodeadas en login local
+
+----------------------------------------
+11. RECOMENDACIONES PARA FUTURAS ITERACIONES
+----------------------------------------
+1. **Prioridad Alta**: Refactorizar AppNavigation.kt en componentes separados
+2. **Prioridad Alta**: Implementar tests unitarios
+3. **Prioridad Media**: Migrar perfil a base de datos
+4. **Prioridad Media**: Mejorar validaciones y UX
+5. **Prioridad Baja**: Agregar funcionalidades avanzadas
+
+----------------------------------------
+12. NOTAS TÉCNICAS IMPORTANTES
+----------------------------------------
+- La app requiere permisos de INTERNET y POST_NOTIFICATIONS
+- Configurada para API 24+ (Android 7.0+)
+- Usa Room con fallbackToDestructiveMigration()
+- Integración con Google Services configurada
+- Manejo de fechas en formato dd/MM/yyyy HH:mm
+- Colores principales: #EF4444 (rojo), #1E293B (azul marino)
+
+----------------------------------------
+Última actualización: Diciembre 2024
+Estado del proyecto: FUNCIONAL - Listo para demostración
+Próximo paso recomendado: Refactorización de AppNavigation.kt 
