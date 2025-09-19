@@ -1438,6 +1438,7 @@ fun ProfileScreen(navController: NavHostController) {
                 Text("Cancelar", color = androidx.compose.ui.graphics.Color.White)
             }
         }
+<<<<<<< HEAD
         
         Spacer(modifier = Modifier.height(16.dp))
         
