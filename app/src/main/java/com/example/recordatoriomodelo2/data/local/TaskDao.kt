@@ -1,0 +1,22 @@
+package com.example.recordatoriomodelo2.data.local
+
+import androidx.room.*
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface TaskDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTask(task: TaskEntity): Long
+
+    @Update
+    suspend fun updateTask(task: TaskEntity)
+
+    @Delete
+    suspend fun deleteTask(task: TaskEntity)
+
+    @Query("SELECT * FROM tasks ORDER BY dueDate ASC")
+    fun getTasks(): Flow<List<TaskEntity>>
+
+    @Query("SELECT * FROM tasks WHERE classroomId = :classroomId LIMIT 1")
+    suspend fun getTaskByClassroomId(classroomId: String): TaskEntity?
+} 
