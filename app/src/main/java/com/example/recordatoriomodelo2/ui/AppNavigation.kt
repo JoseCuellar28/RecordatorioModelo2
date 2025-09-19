@@ -1438,6 +1438,42 @@ fun ProfileScreen(navController: NavHostController) {
                 Text("Cancelar", color = androidx.compose.ui.graphics.Color.White)
             }
         }
+<<<<<<< HEAD
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Botón para cambiar cuenta de Google
+        Button(
+            onClick = {
+                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestEmail()
+                    .build()
+                val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                
+                googleSignInClient.signOut().addOnCompleteListener {
+                    // Limpiar el perfil del usuario
+                    userProfile = UserProfile()
+                    
+                    // Mostrar mensaje de confirmación
+                    Toast.makeText(context, "Sesión cerrada. Selecciona una nueva cuenta.", Toast.LENGTH_SHORT).show()
+                    
+                    // Navegar a la pantalla de login de Google
+                    navController.navigate("google_login") {
+                        popUpTo("selector_auth") { inclusive = false }
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = androidx.compose.ui.graphics.Color(0xFF4285F4)
+            ),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)
+        ) {
+            Text(
+                "Cambiar cuenta de Google",
+                color = androidx.compose.ui.graphics.Color.White
+            )
+        }
     }
 }
 
@@ -1451,4 +1487,4 @@ fun ModernTextField(value: String, onValueChange: (String) -> Unit, label: Strin
         modifier = Modifier.fillMaxWidth(),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
     )
-} 
+}
