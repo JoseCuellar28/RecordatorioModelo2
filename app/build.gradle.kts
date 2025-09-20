@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     id("com.google.gms.google-services")
+    kotlin("plugin.serialization") version "1.9.10"
 }
 
 android {
@@ -81,4 +82,14 @@ dependencies {
     // JavaMail para envío de correos
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
+    
+    // Manejo de imágenes
+    implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.compose.material:material-icons-extended:1.5.4")
+    
+    // HTTP client para ImgBB API
+    implementation("io.ktor:ktor-client-android:2.3.7")
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
 }

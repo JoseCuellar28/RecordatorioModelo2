@@ -4,11 +4,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.navigation.NavHostController
 import androidx.compose.runtime.collectAsState
 import androidx.compose.material3.*
@@ -29,6 +34,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.recordatoriomodelo2.viewmodel.AuthViewModel
 import androidx.compose.ui.platform.LocalContext
 import java.util.regex.Pattern
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import android.net.Uri
+import android.widget.Toast
+import com.example.recordatoriomodelo2.utils.rememberImagePickerHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,8 +56,19 @@ fun RegisterScreen(
     var apellidoMaterno by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var institution by remember { mutableStateOf("") }
-
-    var showSuccessMessage by remember { mutableStateOf(false) }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    
+    // Helper para selección de imagen
+    val imagePickerHelper = rememberImagePickerHelper(
+        onImageSelected = { uri ->
+            selectedImageUri = uri
+        },
+        onError = { error ->
+            // Manejar error de selección de imagen
+            // Por ahora solo lo logueamos
+            android.util.Log.e("RegisterScreen", "Error al seleccionar imagen: $error")
+        }
+    )
     
     // Estados de validación
     var emailError by remember { mutableStateOf("") }
@@ -89,7 +111,7 @@ fun RegisterScreen(
     val uiState by authViewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
     
-    Log.d("RegisterScreen", "Estado actual - isLoading: ${uiState.isLoading}, successMessage: ${uiState.successMessage}, errorMessage: ${uiState.errorMessage}, showSuccessMessage: $showSuccessMessage")
+    Log.d("RegisterScreen", "Estado actual - isLoading: ${uiState.isLoading}, successMessage: ${uiState.successMessage}, errorMessage: ${uiState.errorMessage}")
     
     // Log adicional para verificar campos y estado del botón
     val fullName = "$nombre $apellidoPaterno $apellidoMaterno".trim()
@@ -131,7 +153,82 @@ fun RegisterScreen(
             textAlign = TextAlign.Center
         )
         
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Componente de selección de foto de perfil
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape)
+                    .border(
+                        width = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = CircleShape
+                    )
+                    .clickable { imagePickerHelper.showImagePicker() },
+                contentAlignment = Alignment.Center
+            ) {
+                if (selectedImageUri != null) {
+                    AsyncImage(
+                        model = selectedImageUri,
+                        contentDescription = "Foto de perfil",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.AccountCircle,
+                        contentDescription = "Seleccionar foto",
+                        modifier = Modifier.size(80.dp),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                    )
+                }
+                
+                // Icono de cámara en la esquina
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .border(
+                            width = 2.dp,
+                            color = MaterialTheme.colorScheme.surface,
+                            shape = CircleShape
+                        )
+                        .clickable { imagePickerHelper.showImagePicker() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = "Cambiar foto",
+                            modifier = Modifier.padding(6.dp),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "Toca para agregar foto de perfil",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
         
         // Campos del formulario
         OutlinedTextField(
@@ -219,8 +316,7 @@ fun RegisterScreen(
                 Log.d("RegisterScreen", "Datos: email=$email, nombre=$nombre, apellidoPaterno=$apellidoPaterno, apellidoMaterno=$apellidoMaterno, phone=$phone, institution=$institution")
                 
                 authViewModel.clearMessages()
-                showSuccessMessage = false
-                Log.d("RegisterScreen", "Mensajes limpiados, showSuccessMessage=false")
+                Log.d("RegisterScreen", "Mensajes limpiados")
                 
                 authViewModel.registerUserWithTemporaryPassword(
                     context = context,
@@ -230,18 +326,21 @@ fun RegisterScreen(
                     apellidoMaterno = apellidoMaterno,
                     phone = phone,
                     institution = institution,
+                    profileImageUri = selectedImageUri,
                     onSuccess = {
                         Log.d("RegisterScreen", "=== CALLBACK onSuccess EJECUTADO ===")
-                        // Manejar éxito directamente aquí
-                        showSuccessMessage = true
-                        Log.d("RegisterScreen", "showSuccessMessage=true, iniciando navegación en 3 segundos")
+                        // Mostrar Toast de éxito
+                        Toast.makeText(
+                            context,
+                            "Contraseña temporal enviada exitosamente al correo",
+                            Toast.LENGTH_LONG
+                        ).show()
                         
                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                            Log.d("RegisterScreen", "Esperando 3 segundos...")
-                            kotlinx.coroutines.delay(3000)
-                            Log.d("RegisterScreen", "3 segundos completados, navegando a login")
+                            Log.d("RegisterScreen", "Esperando 2 segundos...")
+                            kotlinx.coroutines.delay(2000)
+                            Log.d("RegisterScreen", "2 segundos completados, navegando a login")
                             authViewModel.clearMessages()
-                            showSuccessMessage = false
                             navController.navigate("login") {
                                 popUpTo("register") { inclusive = true }
                             }
@@ -277,7 +376,7 @@ fun RegisterScreen(
             Text("¿Ya tienes cuenta? Inicia sesión")
         }
         
-        // Mostrar mensajes de error o éxito
+        // Mostrar mensajes de error
         uiState.errorMessage?.let { message ->
             Spacer(modifier = Modifier.height(16.dp))
             Card(
@@ -294,22 +393,23 @@ fun RegisterScreen(
             }
         }
         
-        // Mostrar mensaje de éxito cuando se registra correctamente
-        if (showSuccessMessage) {
+        // Mostrar mensajes de éxito
+        uiState.successMessage?.let { message ->
             Spacer(modifier = Modifier.height(16.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF4CAF50).copy(alpha = 0.1f)
+                    containerColor = androidx.compose.ui.graphics.Color(0xFF4CAF50).copy(alpha = 0.1f)
                 )
             ) {
                 Text(
-                    text = "Se envió contraseña segura al correo registrado",
+                    text = message,
                     modifier = Modifier.padding(16.dp),
-                    color = Color(0xFF2E7D32),
-                    textAlign = TextAlign.Center
+                    color = androidx.compose.ui.graphics.Color(0xFF2E7D32),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
         }
+
     }
 }

@@ -1,17 +1,25 @@
 package com.example.recordatoriomodelo2.ui.screens.auth
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import android.widget.Toast
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -20,7 +28,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
 import com.example.recordatoriomodelo2.viewmodel.AuthViewModel
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 // Función para validar contraseña
 private fun validatePassword(password: String): String {
@@ -73,8 +84,27 @@ fun FirstLoginScreen(
     var confirmPasswordVisible by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf("") }
     var confirmPasswordError by remember { mutableStateOf("") }
+    var userProfileImageUrl by remember { mutableStateOf<String?>(null) }
+    var userName by remember { mutableStateOf("") }
     
     val uiState by authViewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    
+    // Obtener información del usuario actual
+    LaunchedEffect(Unit) {
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        currentUser?.let { user ->
+            val firestore = FirebaseFirestore.getInstance()
+            firestore.collection("users").document(user.uid)
+                .get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        userProfileImageUrl = document.getString("profileImageUrl")
+                        userName = document.getString("fullName") ?: ""
+                    }
+                }
+        }
+    }
     
     // Validaciones en tiempo real
     LaunchedEffect(newPassword) {
@@ -90,6 +120,12 @@ fun FirstLoginScreen(
     // Navegar a home cuando el cambio de contraseña sea exitoso
     LaunchedEffect(uiState.successMessage) {
         if (uiState.successMessage?.contains("actualizada") == true) {
+            // Mostrar toast de confirmación
+            Toast.makeText(context, "Contraseña actualizada exitosamente", Toast.LENGTH_SHORT).show()
+            
+            // Esperar 2 segundos antes de navegar
+            kotlinx.coroutines.delay(2000)
+            
             navController.navigate("home") {
                 popUpTo("first_login") { inclusive = true }
             }
@@ -106,12 +142,66 @@ fun FirstLoginScreen(
     ) {
         // Título
         Text(
-            text = "Primer Inicio de Sesión",
+            text = "Configuración de Contraseña",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
             textAlign = TextAlign.Center
         )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Imagen de perfil del usuario
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .clip(CircleShape)
+                .border(
+                    width = 3.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (userProfileImageUrl != null && userProfileImageUrl!!.isNotEmpty()) {
+                AsyncImage(
+                    model = userProfileImageUrl,
+                    contentDescription = "Foto de perfil",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                // Imagen por defecto si no hay imagen
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Usuario",
+                        modifier = Modifier.size(50.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+        }
+        
+        // Nombre del usuario
+        if (userName.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Bienvenido, $userName",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+        }
         
         Spacer(modifier = Modifier.height(16.dp))
         
@@ -305,21 +395,6 @@ fun FirstLoginScreen(
             }
         }
         
-        // Mostrar mensajes de éxito
-        uiState.successMessage?.let { message ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF4CAF50).copy(alpha = 0.1f)
-                )
-            ) {
-                Text(
-                    text = message,
-                    modifier = Modifier.padding(16.dp),
-                    color = Color(0xFF2E7D32),
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
+
     }
 }

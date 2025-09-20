@@ -76,12 +76,20 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.collectAsState
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import com.example.recordatoriomodelo2.firebase.FirebaseManager
+import kotlinx.coroutines.launch
 
 data class UserProfile(
     val fullName: String = "",
     val email: String = "",
     val phone: String = "",
-    val institution: String = ""
+    val institution: String = "",
+    val profileImageUrl: String = ""
 )
 
 // Estado global simple para el usuario (puede migrarse a ViewModel luego)
@@ -222,6 +230,28 @@ fun HomeScreen(navController: NavHostController) {
     }
     
     var showProfileDialog by remember { mutableStateOf(false) }
+    
+    // Cargar perfil del usuario incluyendo imagen
+    LaunchedEffect(Unit) {
+        val currentUser = FirebaseManager.getCurrentUser()
+        
+        if (currentUser != null) {
+            // Cargar datos del perfil
+            val profileResult = FirebaseManager.getUserProfile(currentUser.uid)
+            if (profileResult.isSuccess) {
+                val profileData: Map<String, Any>? = profileResult.getOrNull()
+                if (profileData != null) {
+                    userProfile = userProfile.copy(
+                        fullName = profileData["fullName"] as? String ?: "",
+                        email = profileData["email"] as? String ?: "",
+                        phone = profileData["phone"] as? String ?: "",
+                        institution = profileData["institution"] as? String ?: "",
+                        profileImageUrl = profileData["profileImageUrl"] as? String ?: ""
+                    )
+                }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -263,14 +293,35 @@ fun HomeScreen(navController: NavHostController) {
                             color = androidx.compose.ui.graphics.Color(0xFFCBD5E1) // Gris claro para subtítulo
                         )
                     }
-                    IconButton(
-                        onClick = { navController.navigate(Screen.Profile.route) }
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .clickable { navController.navigate(Screen.Profile.route) }
+                            .border(
+                                width = 2.dp,
+                                color = androidx.compose.ui.graphics.Color.White,
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            Icons.Filled.AccountCircle,
-                            contentDescription = "Editar perfil",
-                            tint = androidx.compose.ui.graphics.Color.White // Blanco puro
-                        )
+                        if (userProfile.profileImageUrl.isNotEmpty()) {
+                            AsyncImage(
+                                model = userProfile.profileImageUrl,
+                                contentDescription = "Foto de perfil",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.AccountCircle,
+                                contentDescription = "Editar perfil",
+                                tint = androidx.compose.ui.graphics.Color.White,
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -358,37 +409,6 @@ fun HomeScreen(navController: NavHostController) {
             textColor = androidx.compose.ui.graphics.Color.White
         )
         Spacer(modifier = Modifier.height(32.dp))
-        // Elimino el botón rectangular de cerrar sesión
-        // Agrego botón flotante circular en la esquina inferior izquierda
-    }
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomStart
-    ) {
-        Button(
-            onClick = {
-                val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
-                    .requestEmail()
-                    .build()
-                val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
-                googleSignInClient.signOut().addOnCompleteListener { task ->
-                    if (task.isSuccessful) {
-                        Toast.makeText(context, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show()
-                        navController.navigate("selector_auth") { launchSingleTop = true }
-                    } else {
-                        Toast.makeText(context, "Error al cerrar sesión", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFFEF4444)),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .padding(24.dp)
-                .height(36.dp)
-                .widthIn(min = 120.dp, max = 160.dp)
-        ) {
-            Text("Cerrar sesión", color = androidx.compose.ui.graphics.Color.White, fontSize = 14.sp)
-        }
     }
     
     // Diálogo de confirmación para importar
@@ -575,8 +595,23 @@ fun HomeScreen(navController: NavHostController) {
     Box(modifier = Modifier.fillMaxSize()) {
         FloatingActionButton(
             onClick = {
-                navController.navigate(Screen.SelectorAuth.route) {
-                    popUpTo(Screen.Home.route) { inclusive = true }
+                // Cerrar sesión de Firebase Auth
+                com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+                
+                // Cerrar sesión de Google Sign-In
+                val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestEmail()
+                    .build()
+                val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
+                googleSignInClient.signOut().addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        Toast.makeText(context, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show()
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(Screen.Home.route) { inclusive = true }
+                        }
+                    } else {
+                        Toast.makeText(context, "Error al cerrar sesión", Toast.LENGTH_SHORT).show()
+                    }
                 }
             },
             modifier = Modifier

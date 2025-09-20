@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import java.util.regex.Pattern
 import android.util.Log
 import android.content.Context
+import android.net.Uri
 
 data class AuthUiState(
     val isLoading: Boolean = false,
@@ -354,6 +355,7 @@ class AuthViewModel : ViewModel() {
         apellidoMaterno: String,
         phone: String,
         institution: String,
+        profileImageUri: Uri? = null,
         onSuccess: (() -> Unit)? = null
     ) {
         val fullName = "$nombre $apellidoPaterno $apellidoMaterno".trim()
@@ -409,10 +411,29 @@ class AuthViewModel : ViewModel() {
         
         viewModelScope.launch {
             try {
-                Log.d("AuthViewModel", "Iniciando corrutina, llamando a FirebaseManager...")
-                FirebaseManager.registerUserWithTemporaryPassword(email, fullName, phone, institution)
+                Log.d("AuthViewModel", "=== INICIANDO REGISTRO CON IMAGEN ===")
+                Log.d("AuthViewModel", "email: $email")
+                Log.d("AuthViewModel", "fullName: $fullName")
+                Log.d("AuthViewModel", "phone: $phone")
+                Log.d("AuthViewModel", "institution: $institution")
+                Log.d("AuthViewModel", "profileImageUri: $profileImageUri")
+                Log.d("AuthViewModel", "context: $context")
+                Log.d("AuthViewModel", "profileImageUri es null: ${profileImageUri == null}")
+                
+                FirebaseManager.registerUserWithTemporaryPassword(
+                    email = email, 
+                    fullName = fullName, 
+                    phone = phone, 
+                    institution = institution,
+                    profileImageUri = profileImageUri,
+                    context = context
+                )
                     .onSuccess { (user, temporaryPassword) ->
                         Log.d("AuthViewModel", "=== FirebaseManager onSuccess RECIBIDO ===")
+                        Log.d("AuthViewModel", "Usuario registrado exitosamente")
+                        Log.d("AuthViewModel", "user.uid: ${user.uid}")
+                        Log.d("AuthViewModel", "temporaryPassword: $temporaryPassword")
+                        
                         Log.d("AuthViewModel", "Mensaje de éxito: Se envió contraseña segura al correo registrado")
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
