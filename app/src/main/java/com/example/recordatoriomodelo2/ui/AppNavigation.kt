@@ -68,12 +68,28 @@ import androidx.compose.ui.geometry.Offset
 import android.widget.Toast
 import com.example.recordatoriomodelo2.ui.screens.login.PruebaAuthScreen
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
+
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.collectAsState
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import com.example.recordatoriomodelo2.firebase.FirebaseManager
+import kotlinx.coroutines.launch
 
 data class UserProfile(
     val fullName: String = "",
     val email: String = "",
     val phone: String = "",
-    val institution: String = ""
+    val institution: String = "",
+    val profileImageUrl: String = ""
 )
 
 // Estado global simple para el usuario (puede migrarse a ViewModel luego)
@@ -82,12 +98,13 @@ var userProfile by mutableStateOf(UserProfile())
 sealed class Screen(val route: String) {
     object SelectorAuth : Screen("selector_auth")
     object Login : Screen("login")
+    object Register : Screen("register")
+    object FirstLogin : Screen("first_login")
     object GoogleLogin : Screen("google_login")
     object Home : Screen("home")
     object Tasks : Screen("tasks")
     object AddTask : Screen("add_task?taskId={taskId}") {
-        fun createRoute(taskId: Int? = null): String =
-            if (taskId != null) "add_task?taskId=$taskId" else "add_task"
+        fun createRoute(taskId: Int?) = if (taskId != null) "add_task?taskId=$taskId" else "add_task"
     }
     object Profile : Screen("profile")
 }
@@ -95,7 +112,7 @@ sealed class Screen(val route: String) {
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = Screen.SelectorAuth.route) {
+    NavHost(navController = navController, startDestination = Screen.Login.route) {
         composable(Screen.SelectorAuth.route) { SelectorAuthScreen(navController) }
         composable(Screen.Login.route) {
             LoginScreen(navController)
@@ -136,6 +153,12 @@ fun AppNavigation() {
         }
         composable(Screen.Profile.route) {
             ProfileScreen(navController)
+        }
+        composable(Screen.Register.route) {
+            com.example.recordatoriomodelo2.ui.screens.auth.RegisterScreen(navController)
+        }
+        composable(Screen.FirstLogin.route) {
+            com.example.recordatoriomodelo2.ui.screens.auth.FirstLoginScreen(navController)
         }
     }
 }
@@ -207,6 +230,28 @@ fun HomeScreen(navController: NavHostController) {
     }
     
     var showProfileDialog by remember { mutableStateOf(false) }
+    
+    // Cargar perfil del usuario incluyendo imagen
+    LaunchedEffect(Unit) {
+        val currentUser = FirebaseManager.getCurrentUser()
+        
+        if (currentUser != null) {
+            // Cargar datos del perfil
+            val profileResult = FirebaseManager.getUserProfile(currentUser.uid)
+            if (profileResult.isSuccess) {
+                val profileData: Map<String, Any>? = profileResult.getOrNull()
+                if (profileData != null) {
+                    userProfile = userProfile.copy(
+                        fullName = profileData["fullName"] as? String ?: "",
+                        email = profileData["email"] as? String ?: "",
+                        phone = profileData["phone"] as? String ?: "",
+                        institution = profileData["institution"] as? String ?: "",
+                        profileImageUrl = profileData["profileImageUrl"] as? String ?: ""
+                    )
+                }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -248,14 +293,35 @@ fun HomeScreen(navController: NavHostController) {
                             color = androidx.compose.ui.graphics.Color(0xFFCBD5E1) // Gris claro para subtítulo
                         )
                     }
-                    IconButton(
-                        onClick = { navController.navigate(Screen.Profile.route) }
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .clickable { navController.navigate(Screen.Profile.route) }
+                            .border(
+                                width = 2.dp,
+                                color = androidx.compose.ui.graphics.Color.White,
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            Icons.Filled.AccountCircle,
-                            contentDescription = "Editar perfil",
-                            tint = androidx.compose.ui.graphics.Color.White // Blanco puro
-                        )
+                        if (userProfile.profileImageUrl.isNotEmpty()) {
+                            AsyncImage(
+                                model = userProfile.profileImageUrl,
+                                contentDescription = "Foto de perfil",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.AccountCircle,
+                                contentDescription = "Editar perfil",
+                                tint = androidx.compose.ui.graphics.Color.White,
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -316,7 +382,7 @@ fun HomeScreen(navController: NavHostController) {
             title = "Crear Tarea Manual",
             subtitle = "Agregar nueva tarea",
             icon = Icons.Filled.Add,
-            onClick = { navController.navigate(Screen.AddTask.createRoute()) },
+            onClick = { navController.navigate(Screen.AddTask.createRoute(null)) },
             modifier = Modifier.fillMaxWidth(),
             bgColor = androidx.compose.ui.graphics.Color(0xFFF3F4F6),
             iconColor = androidx.compose.ui.graphics.Color(0xFF1E293B),
@@ -343,37 +409,6 @@ fun HomeScreen(navController: NavHostController) {
             textColor = androidx.compose.ui.graphics.Color.White
         )
         Spacer(modifier = Modifier.height(32.dp))
-        // Elimino el botón rectangular de cerrar sesión
-        // Agrego botón flotante circular en la esquina inferior izquierda
-    }
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomStart
-    ) {
-        Button(
-            onClick = {
-                val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
-                    .requestEmail()
-                    .build()
-                val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
-                googleSignInClient.signOut().addOnCompleteListener { task ->
-                    if (task.isSuccessful) {
-                        Toast.makeText(context, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show()
-                        navController.navigate("selector_auth") { launchSingleTop = true }
-                    } else {
-                        Toast.makeText(context, "Error al cerrar sesión", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFFEF4444)),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .padding(24.dp)
-                .height(36.dp)
-                .widthIn(min = 120.dp, max = 160.dp)
-        ) {
-            Text("Cerrar sesión", color = androidx.compose.ui.graphics.Color.White, fontSize = 14.sp)
-        }
     }
     
     // Diálogo de confirmación para importar
@@ -560,8 +595,23 @@ fun HomeScreen(navController: NavHostController) {
     Box(modifier = Modifier.fillMaxSize()) {
         FloatingActionButton(
             onClick = {
-                navController.navigate(Screen.SelectorAuth.route) {
-                    popUpTo(Screen.Home.route) { inclusive = true }
+                // Cerrar sesión de Firebase Auth
+                com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+                
+                // Cerrar sesión de Google Sign-In
+                val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestEmail()
+                    .build()
+                val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
+                googleSignInClient.signOut().addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        Toast.makeText(context, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show()
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(Screen.Home.route) { inclusive = true }
+                        }
+                    } else {
+                        Toast.makeText(context, "Error al cerrar sesión", Toast.LENGTH_SHORT).show()
+                    }
                 }
             },
             modifier = Modifier
@@ -740,6 +790,35 @@ fun SelectorAuthScreen(navController: NavHostController) {
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            // Botón para login tradicional
+            OutlinedButton(
+                onClick = {
+                    navController.navigate(Screen.Login.route)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = androidx.compose.ui.graphics.Color(0xFF059669), // Verde
+                    containerColor = androidx.compose.ui.graphics.Color.Transparent
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    2.dp,
+                    androidx.compose.ui.graphics.Color(0xFF059669)
+                )
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Email,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Iniciar sesión con Email")
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             // Botón para uso sin Google
             OutlinedButton(
                 onClick = {
@@ -776,9 +855,27 @@ fun SelectorAuthScreen(navController: NavHostController) {
 
 @Composable
 fun LoginScreen(navController: NavHostController) {
-    var user by remember { mutableStateOf("") }
+    val authViewModel: com.example.recordatoriomodelo2.viewmodel.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    
+    val uiState by authViewModel.uiState.collectAsState()
+    
+    // Navegar según el estado del login
+    LaunchedEffect(uiState.isLoggedIn, uiState.isFirstLogin) {
+        if (uiState.isLoggedIn) {
+            if (uiState.isFirstLogin) {
+                navController.navigate(Screen.FirstLogin.route) {
+                    popUpTo(Screen.Login.route) { inclusive = true }
+                }
+            } else {
+                navController.navigate(Screen.Home.route) {
+                    popUpTo(Screen.Login.route) { inclusive = true }
+                }
+            }
+        }
+    }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -788,43 +885,137 @@ fun LoginScreen(navController: NavHostController) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(32.dp)
         ) {
+            // Título
+            Text(
+                text = "Iniciar Sesión",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 32.dp)
+            )
+            
             OutlinedTextField(
-                value = user,
-                onValueChange = { user = it },
-                label = { Text("Usuario") },
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email") },
+                leadingIcon = { 
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Default.Email,
+                        contentDescription = null
+                    )
+                },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Email
+                )
             )
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
                 label = { Text("Contraseña") },
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            if (error.isNotEmpty()) {
-                Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 8.dp))
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    if (user.isBlank() || password.isBlank()) {
-                        error = "Por favor, complete todos los campos."
-                    } else if (user == "admin" && password == "1234") {
-                        error = ""
-                        navController.navigate(Screen.Home.route) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
-                        }
-                    } else {
-                        error = "Usuario o contraseña incorrectos."
+                leadingIcon = { 
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Default.Lock,
+                        contentDescription = null
+                    )
+                },
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            imageVector = if (passwordVisible) 
+                                Icons.Default.Lock 
+                            else 
+                                Icons.Default.Lock,
+                            contentDescription = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña"
+                        )
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                singleLine = true,
+                visualTransformation = if (passwordVisible) 
+                    androidx.compose.ui.text.input.VisualTransformation.None 
+                else 
+                    PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Password
+                )
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            Button(
+                onClick = {
+                    authViewModel.clearMessages()
+                    authViewModel.signIn(email, password)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                enabled = !uiState.isLoading && email.isNotEmpty() && password.isNotEmpty()
             ) {
-                Text("Ingresar")
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("Iniciar Sesión", fontSize = 16.sp)
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Botón para ir al registro
+            TextButton(
+                onClick = { 
+                    navController.navigate(Screen.Register.route)
+                }
+            ) {
+                Text("¿No tienes cuenta? Regístrate")
+            }
+            
+            // Botón para restablecer contraseña
+            TextButton(
+                onClick = {
+                    if (email.isNotEmpty()) {
+                        authViewModel.sendPasswordResetEmail(email)
+                    }
+                }
+            ) {
+                Text("¿Olvidaste tu contraseña?")
+            }
+            
+            // Mostrar mensajes de error o éxito
+            uiState.errorMessage?.let { message ->
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Text(
+                        text = message,
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+            
+            uiState.successMessage?.let { message ->
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFF4CAF50).copy(alpha = 0.1f)
+                    )
+                ) {
+                    Text(
+                        text = message,
+                        modifier = Modifier.padding(16.dp),
+                        color = androidx.compose.ui.graphics.Color(0xFF2E7D32)
+                    )
+                }
             }
         }
     }
@@ -938,7 +1129,7 @@ fun TasksScreen(navController: NavHostController) {
         
         // Floating Action Button
         FloatingActionButton(
-            onClick = { navController.navigate(Screen.AddTask.createRoute()) },
+            onClick = { navController.navigate(Screen.AddTask.createRoute(null)) },
             modifier = Modifier
                 .align(Alignment.End)
                 .padding(24.dp),
@@ -1438,7 +1629,6 @@ fun ProfileScreen(navController: NavHostController) {
                 Text("Cancelar", color = androidx.compose.ui.graphics.Color.White)
             }
         }
-<<<<<<< HEAD
         
         Spacer(modifier = Modifier.height(16.dp))
         
