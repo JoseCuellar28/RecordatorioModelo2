@@ -17,6 +17,12 @@ interface TaskDao {
     @Query("SELECT * FROM tasks ORDER BY dueDate ASC")
     fun getTasks(): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM tasks WHERE userId = :userId ORDER BY dueDate ASC")
+    fun getTasksByUser(userId: String): Flow<List<TaskEntity>>
+
     @Query("SELECT * FROM tasks WHERE classroomId = :classroomId LIMIT 1")
     suspend fun getTaskByClassroomId(classroomId: String): TaskEntity?
-} 
+
+    @Query("SELECT * FROM tasks WHERE classroomId = :classroomId AND userId = :userId LIMIT 1")
+    suspend fun getTaskByClassroomIdAndUser(classroomId: String, userId: String): TaskEntity?
+}
