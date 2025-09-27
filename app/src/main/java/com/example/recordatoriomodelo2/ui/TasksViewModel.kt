@@ -18,6 +18,12 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import com.example.recordatoriomodelo2.TaskReminderReceiver
+import com.example.recordatoriomodelo2.firebase.FirebaseManager
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 
 class TasksViewModel(app: Application) : AndroidViewModel(app) {
     private val db = Room.databaseBuilder(
@@ -28,18 +34,68 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
     .fallbackToDestructiveMigration()
     .build()
     private val taskDao = db.taskDao()
+    private val userDao = db.userDao()
 
-    val tasks: Flow<List<TaskEntity>> = taskDao.getTasks()
+    // Estado del usuario actual
+    private val _currentUserId = MutableStateFlow<String?>(null)
+    val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
+
+    // Tareas filtradas por usuario actual
+    val tasks: Flow<List<TaskEntity>> = _currentUserId.flatMapLatest { userId ->
+        if (userId != null) {
+            taskDao.getTasksByUser(userId)
+        } else {
+            flowOf(emptyList())
+        }
+    }
 
     val tasksOrdered: Flow<List<TaskEntity>> = tasks.map { list ->
         list.sortedWith(compareBy<TaskEntity> { it.isCompleted }.thenByDescending { it.createdAt })
     }
 
+    init {
+        // Sincronizar usuario al inicializar
+        syncCurrentUser()
+    }
+
+    /**
+     * Sincroniza el usuario actual de Firebase con la base de datos local
+     */
+    fun syncCurrentUser() {
+        viewModelScope.launch {
+            try {
+                val result = FirebaseManager.syncFirebaseUserToLocal(userDao)
+                if (result.isSuccess) {
+                    val currentUser = FirebaseManager.getCurrentUser()
+                    _currentUserId.value = currentUser?.uid
+                    android.util.Log.d("TasksViewModel", "Usuario sincronizado: ${currentUser?.uid}")
+                } else {
+                    android.util.Log.e("TasksViewModel", "Error al sincronizar usuario: ${result.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("TasksViewModel", "Error en syncCurrentUser", e)
+            }
+        }
+    }
+
     fun insertTask(title: String, subject: String, reminderAt: String?) {
         viewModelScope.launch {
+            val userId = _currentUserId.value
+            if (userId == null) {
+                android.util.Log.e("TasksViewModel", "No hay usuario autenticado para crear tarea")
+                return@launch
+            }
+            
             val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
             val now = dateFormat.format(Date())
-            val task = TaskEntity(title = title, subject = subject, dueDate = "", createdAt = now, reminderAt = reminderAt)
+            val task = TaskEntity(
+                title = title, 
+                subject = subject, 
+                dueDate = "", 
+                createdAt = now, 
+                reminderAt = reminderAt,
+                userId = userId
+            )
             val id = taskDao.insertTask(task)
             if (!reminderAt.isNullOrEmpty()) {
                 scheduleTaskReminder(getApplication(), title, subject, reminderAt)
@@ -68,9 +124,15 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
 
     fun importarTareasClassroom(tasks: List<com.example.recordatoriomodelo2.ui.screens.login.ClassroomTask>, subject: String) {
         viewModelScope.launch {
+            val userId = _currentUserId.value
+            if (userId == null) {
+                android.util.Log.e("TasksViewModel", "No hay usuario autenticado para importar tareas")
+                return@launch
+            }
+            
             for (task in tasks) {
-                // Evitar duplicados por classroomId
-                val exists = taskDao.getTaskByClassroomId(task.id) != null
+                // Evitar duplicados por classroomId y usuario
+                val exists = taskDao.getTaskByClassroomIdAndUser(task.id, userId) != null
                 if (!exists) {
                     val entity = TaskEntity(
                         title = task.title,
@@ -79,7 +141,8 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
                         isCompleted = false,
                         createdAt = formatCreationTime(task.creationTime),
                         reminderAt = task.dueDate,
-                        classroomId = task.id
+                        classroomId = task.id,
+                        userId = userId
                     )
                     taskDao.insertTask(entity)
                 }
@@ -130,8 +193,14 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
     // Función para limpiar fechas JSON existentes en la base de datos
     fun limpiarFechasExistentes() {
         viewModelScope.launch {
-            val todasLasTareas = taskDao.getTasks().first()
-            for (tarea in todasLasTareas) {
+            val userId = _currentUserId.value
+            if (userId == null) {
+                android.util.Log.e("TasksViewModel", "No hay usuario autenticado para limpiar fechas")
+                return@launch
+            }
+            
+            val tareasDelUsuario = taskDao.getTasksByUser(userId).first()
+            for (tarea in tareasDelUsuario) {
                 var tareaActualizada = tarea
                 
                 // Limpiar fecha de vencimiento si es JSON
@@ -194,4 +263,4 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
             android.util.Log.e("TaskReminder", "Error al programar recordatorio", e)
         }
     }
-} 
+}

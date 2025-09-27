@@ -10,6 +10,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -240,7 +242,7 @@ fun FirstLoginScreen(
             trailingIcon = {
                 IconButton(onClick = { newPasswordVisible = !newPasswordVisible }) {
                     Icon(
-                        imageVector = Icons.Default.Lock,
+                        imageVector = if (newPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                         contentDescription = if (newPasswordVisible) "Ocultar contraseña" else "Mostrar contraseña"
                     )
                 }
@@ -308,7 +310,7 @@ fun FirstLoginScreen(
             trailingIcon = {
                 IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
                     Icon(
-                        imageVector = Icons.Default.Lock,
+                        imageVector = if (confirmPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                         contentDescription = if (confirmPasswordVisible) "Ocultar contraseña" else "Mostrar contraseña"
                     )
                 }

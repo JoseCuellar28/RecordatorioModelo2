@@ -623,4 +623,49 @@ object FirebaseManager {
             Result.failure(e)
         }
     }
+
+    /**
+     * Sincroniza el usuario de Firebase con la base de datos local
+     * @param userDao DAO para operaciones de usuario local
+     * @return Result indicando éxito o fallo
+     */
+    suspend fun syncFirebaseUserToLocal(userDao: com.example.recordatoriomodelo2.data.local.UserDao): Result<Unit> {
+        return try {
+            val currentUser = getCurrentUser() ?: return Result.failure(Exception("Usuario no autenticado"))
+            
+            Log.d("FirebaseManager", "=== INICIO syncFirebaseUserToLocal ===")
+            Log.d("FirebaseManager", "Firebase UID: ${currentUser.uid}")
+            Log.d("FirebaseManager", "Email: ${currentUser.email}")
+            
+            // Verificar si el usuario ya existe en la base de datos local
+            val existingUser = userDao.getUserByFirebaseUid(currentUser.uid)
+            
+            val currentTime = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+            
+            if (existingUser != null) {
+                // Usuario existe, actualizar último login
+                userDao.updateLastLogin(currentUser.uid, currentTime)
+                Log.d("FirebaseManager", "Usuario existente actualizado - último login: $currentTime")
+            } else {
+                // Usuario nuevo, crear registro local
+                val newUser = com.example.recordatoriomodelo2.data.local.UserEntity(
+                    firebaseUid = currentUser.uid,
+                    email = currentUser.email ?: "",
+                    displayName = currentUser.displayName,
+                    photoUrl = currentUser.photoUrl?.toString(),
+                    createdAt = currentTime,
+                    lastLoginAt = currentTime
+                )
+                
+                userDao.insertUser(newUser)
+                Log.d("FirebaseManager", "Nuevo usuario creado en base de datos local")
+            }
+            
+            Log.d("FirebaseManager", "Sincronización completada exitosamente")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "Error al sincronizar usuario Firebase con base de datos local", e)
+            Result.failure(e)
+        }
+    }
 }

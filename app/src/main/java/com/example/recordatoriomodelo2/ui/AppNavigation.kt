@@ -70,6 +70,8 @@ import com.example.recordatoriomodelo2.ui.screens.login.PruebaAuthScreen
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
@@ -924,9 +926,9 @@ fun LoginScreen(navController: NavHostController) {
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
                             imageVector = if (passwordVisible) 
-                                Icons.Default.Lock 
+                                Icons.Default.Visibility 
                             else 
-                                Icons.Default.Lock,
+                                Icons.Default.VisibilityOff,
                             contentDescription = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña"
                         )
                     }
