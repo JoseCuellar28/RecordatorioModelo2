@@ -32,6 +32,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.recordatoriomodelo2.viewmodel.AuthViewModel
+import com.example.recordatoriomodelo2.viewmodel.AuthViewModelFactory
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -77,9 +78,12 @@ private fun getPasswordStrength(password: String): Pair<String, Color> {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FirstLoginScreen(
-    navController: NavHostController,
-    authViewModel: AuthViewModel = viewModel()
+    navController: NavHostController
 ) {
+    val context = LocalContext.current
+    val authViewModel: AuthViewModel = viewModel(
+        factory = AuthViewModelFactory(context)
+    )
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var newPasswordVisible by remember { mutableStateOf(false) }
@@ -90,7 +94,6 @@ fun FirstLoginScreen(
     var userName by remember { mutableStateOf("") }
     
     val uiState by authViewModel.uiState.collectAsState()
-    val context = LocalContext.current
     
     // Obtener información del usuario actual
     LaunchedEffect(Unit) {

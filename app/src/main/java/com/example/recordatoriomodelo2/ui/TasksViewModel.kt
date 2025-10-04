@@ -38,8 +38,8 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
     private val taskDao = db.taskDao()
     private val userDao = db.userDao()
     
-    // Repositorio para manejo de sincronización
-    private val taskRepository = TaskRepository(taskDao)
+    // Repositorio para manejo de sincronización con validaciones de seguridad
+    private val taskRepository = TaskRepository(taskDao, app)
 
     // Estado del usuario actual
     private val _currentUserId = MutableStateFlow<String?>(null)

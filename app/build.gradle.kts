@@ -92,6 +92,9 @@ dependencies {
     implementation("io.ktor:ktor-client-android:2.3.7")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
+    
+    // Seguridad y encriptación
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }
 
 // Funciones para manejo automático de versiones

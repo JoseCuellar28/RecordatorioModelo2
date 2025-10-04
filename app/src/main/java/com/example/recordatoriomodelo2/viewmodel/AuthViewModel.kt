@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.recordatoriomodelo2.firebase.FirebaseManager
 import com.example.recordatoriomodelo2.services.EmailService
+import com.example.recordatoriomodelo2.services.SessionPersistenceService
+import com.example.recordatoriomodelo2.services.SessionInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,14 +30,53 @@ data class ValidationResult(
     val errorMessage: String? = null
 )
 
-class AuthViewModel : ViewModel() {
+class AuthViewModel(private val context: Context? = null) : ViewModel() {
     
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
     
+    private val sessionPersistenceService: SessionPersistenceService? = 
+        context?.let { SessionPersistenceService.getInstance(it) }
+    
     init {
-        // No verificar automáticamente el estado de autenticación
-        // La aplicación siempre debe iniciar en la pantalla de Login
+        // Intentar auto-login si está habilitado
+        context?.let { attemptAutoLogin(it) }
+    }
+    
+    private fun attemptAutoLogin(context: Context) {
+        viewModelScope.launch {
+            Log.d("AuthViewModel", "Iniciando attemptAutoLogin")
+            sessionPersistenceService?.attemptAutoLogin()?.let { result ->
+                Log.d("AuthViewModel", "Resultado de attemptAutoLogin: isSuccess=${result.isSuccess}, data=${result.getOrNull()}")
+                if (result.isSuccess) {
+                    val userId = result.getOrNull()
+                    if (userId != null) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoggedIn = true
+                            // No mostrar mensaje de éxito para auto-login
+                        )
+                        Log.d("AuthViewModel", "Auto-login exitoso para userId: $userId")
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoggedIn = false
+                        )
+                        Log.d("AuthViewModel", "Auto-login devolvió null - no hay sesión válida")
+                    }
+                } else {
+                    // Auto-login falló, mantener en pantalla de login
+                    _uiState.value = _uiState.value.copy(
+                        isLoggedIn = false
+                    )
+                    Log.d("AuthViewModel", "Auto-login falló: ${result.exceptionOrNull()?.message}")
+                }
+            } ?: run {
+                // No hay servicio de persistencia o no hay sesión guardada
+                _uiState.value = _uiState.value.copy(
+                    isLoggedIn = false
+                )
+                Log.d("AuthViewModel", "No hay servicio de persistencia")
+            }
+        }
     }
     
     private fun checkAuthState() {
@@ -230,19 +271,24 @@ class AuthViewModel : ViewModel() {
             _uiState.value = _uiState.value.copy(errorMessage = emailValidation.errorMessage)
             return
         }
-        
+
         val passwordValidation = validatePassword(password)
         if (!passwordValidation.isValid) {
             _uiState.value = _uiState.value.copy(errorMessage = passwordValidation.errorMessage)
             return
         }
-        
+
         _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
         Log.d("AuthViewModel", "Estado actualizado: isLoading=true, errorMessage=null")
-        
+
         viewModelScope.launch {
             FirebaseManager.signInUser(email, password)
                 .onSuccess { user ->
+                    // Configurar persistencia de sesión
+                    viewModelScope.launch {
+                        sessionPersistenceService?.configureSessionPersistence(user.uid)
+                    }
+                    
                     // Verificar si es el primer login
                     FirebaseManager.isFirstLogin()
                         .onSuccess { isFirstLogin ->
@@ -539,11 +585,26 @@ class AuthViewModel : ViewModel() {
     
     // Cerrar sesión
     fun signOut() {
-        FirebaseManager.signOut()
-        _uiState.value = _uiState.value.copy(
-            isLoggedIn = false,
-            successMessage = "Sesión cerrada exitosamente"
-        )
+        viewModelScope.launch {
+            Log.d("AuthViewModel", "Iniciando signOut")
+            
+            // Deshabilitar auto-login
+            sessionPersistenceService?.disableAutoLogin()
+            
+            // Limpiar persistencia de sesión
+            sessionPersistenceService?.clearSessionData()
+            
+            // Cerrar sesión en Firebase
+            FirebaseManager.signOut()
+            
+            _uiState.value = _uiState.value.copy(
+                isLoggedIn = false,
+                successMessage = "Sesión cerrada exitosamente"
+            )
+            
+            Log.d("AuthViewModel", "Estado actualizado después de signOut: isLoggedIn=${_uiState.value.isLoggedIn}")
+            Log.d("AuthViewModel", "SignOut completado")
+        }
     }
     
     // Limpiar mensajes
@@ -554,6 +615,27 @@ class AuthViewModel : ViewModel() {
         )
     }
     
+    // Limpiar completamente todos los datos de la aplicación (para testing)
+    fun clearAllAppData() {
+        viewModelScope.launch {
+            Log.d("AuthViewModel", "Limpiando todos los datos de la aplicación")
+            
+            // Deshabilitar auto-login
+            sessionPersistenceService?.disableAutoLogin()
+            
+            // Limpiar persistencia de sesión
+            sessionPersistenceService?.clearSessionData()
+            
+            // Cerrar sesión en Firebase
+            FirebaseManager.signOut()
+            
+            // Resetear estado UI
+            _uiState.value = AuthUiState()
+            
+            Log.d("AuthViewModel", "Todos los datos limpiados")
+        }
+    }
+    
     // Cerrar diálogo de contraseña
     fun dismissPasswordDialog() {
         _uiState.value = _uiState.value.copy(
@@ -562,6 +644,26 @@ class AuthViewModel : ViewModel() {
         )
     }
     
+    // Habilitar auto-login
+    fun enableAutoLogin() {
+        sessionPersistenceService?.enableAutoLogin()
+    }
+    
+    // Deshabilitar auto-login
+    fun disableAutoLogin() {
+        sessionPersistenceService?.disableAutoLogin()
+    }
+    
+    // Verificar si auto-login está habilitado
+    fun isAutoLoginEnabled(): Boolean {
+        return sessionPersistenceService?.isAutoLoginEnabled() ?: false
+    }
+    
+    // Obtener información de sesión
+    fun getSessionInfo(): SessionInfo? {
+        return sessionPersistenceService?.getCurrentSessionInfo()
+    }
+
     // Obtener mensaje de error amigable
     private fun getErrorMessage(exception: Throwable): String {
         return when (exception.message) {

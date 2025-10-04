@@ -15,9 +15,9 @@ import androidx.room.ForeignKey
 )
 data class TaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val title: String,
-    val subject: String,
-    val dueDate: String,
+    val title: String = "",
+    val subject: String = "",
+    val dueDate: String = "",
     val isCompleted: Boolean = false,
     val createdAt: String = "",
     val reminderAt: String? = null,
