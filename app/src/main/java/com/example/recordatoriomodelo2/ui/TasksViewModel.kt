@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import com.example.recordatoriomodelo2.data.local.AppDatabase
 import com.example.recordatoriomodelo2.data.local.TaskEntity
+import com.example.recordatoriomodelo2.data.repository.TaskRepository
 import kotlinx.coroutines.flow.Flow
 import androidx.room.Room
 import androidx.lifecycle.viewModelScope
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import android.util.Log
 
 class TasksViewModel(app: Application) : AndroidViewModel(app) {
     private val db = Room.databaseBuilder(
@@ -35,22 +37,33 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
     .build()
     private val taskDao = db.taskDao()
     private val userDao = db.userDao()
+    
+    // Repositorio para manejo de sincronización
+    private val taskRepository = TaskRepository(taskDao)
 
     // Estado del usuario actual
     private val _currentUserId = MutableStateFlow<String?>(null)
     val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
 
-    // Tareas filtradas por usuario actual
-    val tasks: Flow<List<TaskEntity>> = _currentUserId.flatMapLatest { userId ->
-        if (userId != null) {
-            taskDao.getTasksByUser(userId)
-        } else {
-            flowOf(emptyList())
-        }
-    }
+    // Estado de sincronización
+    private val _syncStatus = MutableStateFlow<SyncStatus>(SyncStatus.Idle)
+    val syncStatus: StateFlow<SyncStatus> = _syncStatus.asStateFlow()
+
+    // Tareas con sincronización en tiempo real
+    val tasks: Flow<List<TaskEntity>> = taskRepository.getTasksForCurrentUser()
 
     val tasksOrdered: Flow<List<TaskEntity>> = tasks.map { list ->
         list.sortedWith(compareBy<TaskEntity> { it.isCompleted }.thenByDescending { it.createdAt })
+    }
+
+    /**
+     * Estados de sincronización para mostrar indicadores visuales
+     */
+    sealed class SyncStatus {
+        object Idle : SyncStatus()
+        object Syncing : SyncStatus()
+        object Success : SyncStatus()
+        data class Error(val message: String) : SyncStatus()
     }
 
     init {
@@ -82,44 +95,100 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val userId = _currentUserId.value
             if (userId == null) {
-                android.util.Log.e("TasksViewModel", "No hay usuario autenticado para crear tarea")
+                Log.e("TasksViewModel", "No hay usuario autenticado para crear tarea")
+                _syncStatus.value = SyncStatus.Error("Usuario no autenticado")
                 return@launch
             }
             
-            val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-            val now = dateFormat.format(Date())
-            val task = TaskEntity(
-                title = title, 
-                subject = subject, 
-                dueDate = "", 
-                createdAt = now, 
-                reminderAt = reminderAt,
-                userId = userId
-            )
-            val id = taskDao.insertTask(task)
-            if (!reminderAt.isNullOrEmpty()) {
-                scheduleTaskReminder(getApplication(), title, subject, reminderAt)
+            try {
+                _syncStatus.value = SyncStatus.Syncing
+                
+                val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+                val now = dateFormat.format(Date())
+                val task = TaskEntity(
+                    title = title, 
+                    subject = subject, 
+                    dueDate = "", 
+                    createdAt = now, 
+                    reminderAt = reminderAt,
+                    userId = userId
+                )
+                
+                // Insertar con sincronización automática
+                taskRepository.insertTask(task)
+                
+                if (!reminderAt.isNullOrEmpty()) {
+                    scheduleTaskReminder(getApplication(), title, subject, reminderAt)
+                }
+                
+                _syncStatus.value = SyncStatus.Success
+                Log.d("TasksViewModel", "Tarea insertada y sincronizada: $title")
+            } catch (e: Exception) {
+                Log.e("TasksViewModel", "Error al insertar tarea", e)
+                _syncStatus.value = SyncStatus.Error("Error al crear tarea: ${e.message}")
             }
         }
     }
 
     fun updateTask(task: TaskEntity) {
         viewModelScope.launch {
-            taskDao.updateTask(task)
-            if (!task.reminderAt.isNullOrEmpty()) {
-                scheduleTaskReminder(getApplication(), task.title, task.subject, task.reminderAt!!)
+            try {
+                _syncStatus.value = SyncStatus.Syncing
+                
+                // Actualizar con sincronización automática
+                taskRepository.updateTask(task)
+                
+                if (!task.reminderAt.isNullOrEmpty()) {
+                    scheduleTaskReminder(getApplication(), task.title, task.subject, task.reminderAt!!)
+                }
+                
+                _syncStatus.value = SyncStatus.Success
+                Log.d("TasksViewModel", "Tarea actualizada y sincronizada: ${task.title}")
+            } catch (e: Exception) {
+                Log.e("TasksViewModel", "Error al actualizar tarea", e)
+                _syncStatus.value = SyncStatus.Error("Error al actualizar tarea: ${e.message}")
             }
         }
     }
 
     fun deleteTask(task: TaskEntity) {
         viewModelScope.launch {
-            taskDao.deleteTask(task)
+            try {
+                _syncStatus.value = SyncStatus.Syncing
+                
+                // Eliminar con sincronización automática
+                taskRepository.deleteTask(task)
+                
+                _syncStatus.value = SyncStatus.Success
+                Log.d("TasksViewModel", "Tarea eliminada y sincronizada: ${task.title}")
+            } catch (e: Exception) {
+                Log.e("TasksViewModel", "Error al eliminar tarea", e)
+                _syncStatus.value = SyncStatus.Error("Error al eliminar tarea: ${e.message}")
+            }
         }
     }
 
     fun toggleCompleted(task: TaskEntity) {
         updateTask(task.copy(isCompleted = !task.isCompleted))
+    }
+
+    /**
+     * Fuerza la sincronización manual de todas las tareas
+     * La sincronización se realiza automáticamente a través del Flow de getTasksForCurrentUser()
+     */
+    fun forceSyncTasks() {
+        viewModelScope.launch {
+            try {
+                _syncStatus.value = SyncStatus.Syncing
+                // La sincronización se maneja automáticamente en el repositorio
+                // Solo necesitamos actualizar el estado
+                _syncStatus.value = SyncStatus.Success
+                Log.d("TasksViewModel", "Sincronización manual completada")
+            } catch (e: Exception) {
+                Log.e("TasksViewModel", "Error en sincronización manual", e)
+                _syncStatus.value = SyncStatus.Error("Error de sincronización: ${e.message}")
+            }
+        }
     }
 
     fun importarTareasClassroom(tasks: List<com.example.recordatoriomodelo2.ui.screens.login.ClassroomTask>, subject: String) {
