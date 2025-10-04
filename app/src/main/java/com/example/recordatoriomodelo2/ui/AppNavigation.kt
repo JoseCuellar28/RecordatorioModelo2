@@ -122,7 +122,7 @@ fun AppNavigation() {
         composable(Screen.GoogleLogin.route) {
             val viewModel: com.example.recordatoriomodelo2.ui.screens.login.LoginViewModel = viewModel()
             val state by viewModel.state.collectAsState()
-            com.example.recordatoriomodelo2.ui.screens.login.LoginScreen(
+            com.example.recordatoriomodelo2.ui.screens.login.GoogleLoginScreen(
                 navController = navController,
                 user = state.user,
                 onUserChange = { viewModel.onEvent(com.example.recordatoriomodelo2.ui.screens.login.LoginEvent.UserChanged(it)) },
@@ -862,6 +862,10 @@ fun LoginScreen(navController: NavHostController) {
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     
+    // Estado para el diálogo de recuperación de contraseña
+    var showPasswordResetDialog by remember { mutableStateOf(false) }
+    var resetEmail by remember { mutableStateOf("") }
+    
     val uiState by authViewModel.uiState.collectAsState()
     
     // Navegar según el estado del login
@@ -979,9 +983,8 @@ fun LoginScreen(navController: NavHostController) {
             // Botón para restablecer contraseña
             TextButton(
                 onClick = {
-                    if (email.isNotEmpty()) {
-                        authViewModel.sendPasswordResetEmail(email)
-                    }
+                    showPasswordResetDialog = true
+                    resetEmail = email // Pre-llenar con el email del login si existe
                 }
             ) {
                 Text("¿Olvidaste tu contraseña?")
@@ -1020,6 +1023,62 @@ fun LoginScreen(navController: NavHostController) {
                 }
             }
         }
+    }
+    
+    // Diálogo de recuperación de contraseña
+    if (showPasswordResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showPasswordResetDialog = false },
+            title = { Text("Recuperar Contraseña") },
+            text = {
+                Column {
+                    Text("Ingresa tu email para recibir un enlace de recuperación:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = resetEmail,
+                        onValueChange = { resetEmail = it },
+                        label = { Text("Email") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    // Mostrar mensajes de error o éxito
+                    uiState.errorMessage?.let { message ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    
+                    uiState.successMessage?.let { message ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = message,
+                            color = androidx.compose.ui.graphics.Color(0xFF2E7D32),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        authViewModel.sendPasswordResetEmail(resetEmail)
+                        showPasswordResetDialog = false
+                    }
+                ) {
+                    Text("Enviar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showPasswordResetDialog = false }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
 
