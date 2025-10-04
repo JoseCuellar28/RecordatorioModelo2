@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Reglas para la colección de tareas
+    match /tasks/{taskId} {
+      // Solo permitir acceso si el usuario está autenticado
+      // y la tarea pertenece al usuario actual
+      allow read, write: if request.auth != null 
+                         && request.auth.uid == resource.data.userId;
+      
+      // Permitir crear nuevas tareas solo si el usuario está autenticado
+      // y el userId en el documento coincide con el usuario autenticado
+      allow create: if request.auth != null 
+                    && request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Reglas para la colección de usuarios
+    match /users/{userId} {
+      // Solo permitir acceso al propio perfil del usuario
+      allow read, write: if request.auth != null 
+                         && request.auth.uid == userId;
+      
+      // Permitir crear perfil solo para el usuario autenticado
+      allow create: if request.auth != null 
+                    && request.auth.uid == userId;
+    }
+    
+    // Reglas para la colección de sesiones (si se implementa)
+    match /sessions/{sessionId} {
+      // Solo permitir acceso a las propias sesiones
+      allow read, write: if request.auth != null 
+                         && request.auth.uid == resource.data.userId;
+      
+      // Permitir crear sesiones solo para el usuario autenticado
+      allow create: if request.auth != null 
+                    && request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Reglas para metadatos de sincronización (si se implementa)
+    match /sync_metadata/{userId} {
+      // Solo permitir acceso a los propios metadatos de sincronización
+      allow read, write: if request.auth != null 
+                         && request.auth.uid == userId;
+    }
+    
+    // Denegar acceso a cualquier otra colección no especificada
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

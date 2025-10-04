@@ -48,10 +48,10 @@ data class ClassroomTask(
     val creationTime: String? = null
 )
 
-private const val GOOGLE_CLIENT_ID_WEB = "939841424668-6q07p835rkmnnbg2j5ttq0k6p35q9s6h.apps.googleusercontent.com"
+private const val GOOGLE_CLIENT_ID_WEB = "187745473067-4o18286bbq0n7jeuavqjhghk80j9fod0.apps.googleusercontent.com"
 
 @Composable
-fun LoginScreen(
+fun GoogleLoginScreen(
     navController: NavHostController,
     user: String,
     onUserChange: (String) -> Unit,
@@ -345,4 +345,4 @@ fun LoginScreen(
                         }
                     }
                 }
-} 
+}

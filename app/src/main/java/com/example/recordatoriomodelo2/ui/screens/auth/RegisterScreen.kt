@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.recordatoriomodelo2.viewmodel.AuthViewModel
+import com.example.recordatoriomodelo2.viewmodel.AuthViewModelFactory
 import androidx.compose.ui.platform.LocalContext
 import java.util.regex.Pattern
 import androidx.compose.ui.draw.clip
@@ -44,12 +45,14 @@ import com.example.recordatoriomodelo2.utils.rememberImagePickerHelper
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
-    navController: NavHostController,
-    authViewModel: AuthViewModel = viewModel()
+    navController: NavHostController
 ) {
     Log.d("RegisterScreen", "=== INICIO RegisterScreen Composable ===")
     
     val context = LocalContext.current
+    val authViewModel: AuthViewModel = viewModel(
+        factory = AuthViewModelFactory(context)
+    )
     var email by remember { mutableStateOf("") }
     var nombre by remember { mutableStateOf("") }
     var apellidoPaterno by remember { mutableStateOf("") }
