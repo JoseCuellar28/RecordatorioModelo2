@@ -4,6 +4,12 @@ import android.content.Context
 import android.util.Log
 import com.example.recordatoriomodelo2.data.local.TaskDao
 import com.example.recordatoriomodelo2.data.local.TaskEntity
+import com.example.recordatoriomodelo2.data.sync.SyncManager
+import com.example.recordatoriomodelo2.data.sync.SyncStatus
+import com.example.recordatoriomodelo2.data.sync.SyncState
+import com.example.recordatoriomodelo2.data.sync.ConflictResolutionResult
+import com.example.recordatoriomodelo2.data.sync.SyncConflict
+import com.example.recordatoriomodelo2.data.sync.ConflictResolution
 import com.example.recordatoriomodelo2.services.SessionManager
 import com.example.recordatoriomodelo2.middleware.SecurityMiddleware
 import com.example.recordatoriomodelo2.middleware.SecurityResult
@@ -13,9 +19,11 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.*
@@ -33,6 +41,7 @@ class TaskRepository(
     
     private val sessionManager: SessionManager by lazy { SessionManager.getInstance(context) }
     private val securityMiddleware: SecurityMiddleware by lazy { SecurityMiddleware.getInstance(context) }
+    private val syncManager: SyncManager by lazy { SyncManager.getInstance(context) }
     
     companion object {
         private const val TAG = "TaskRepository"
@@ -40,16 +49,16 @@ class TaskRepository(
     }
     
     /**
-     * Obtiene las tareas del usuario actual con sincronización en tiempo real
-     * Combina datos locales (Room) con datos remotos (Firestore)
+     * Obtiene las tareas del usuario actual con sincronización en tiempo real mejorada
+     * Combina datos locales (Room) con datos remotos (Firestore) usando SyncManager
      */
     fun getTasksForCurrentUser(): Flow<List<TaskEntity>> {
         val currentUser = auth.currentUser
         return if (currentUser != null) {
-            // Combinar datos locales con sincronización en tiempo real de Firestore
+            // Usar el nuevo SyncManager para sincronización en tiempo real
             combine(
                 getLocalTasks(currentUser.uid),
-                getFirestoreTasks(currentUser.uid)
+                syncManager.startRealtimeSync(currentUser.uid)
             ) { localTasks, firestoreTasks ->
                 // Sincronizar automáticamente las diferencias
                 syncTasksInBackground(localTasks, firestoreTasks, currentUser.uid)
@@ -60,6 +69,74 @@ class TaskRepository(
         } else {
             flowOf(emptyList())
         }
+    }
+    
+    /**
+     * Obtiene el estado de sincronización actual
+     */
+    fun getSyncStatus(): StateFlow<SyncManager.SyncState> {
+        return syncManager.syncState
+    }
+    
+    /**
+     * Obtiene el último error de sincronización
+     */
+    fun getLastSyncError(): StateFlow<String?> {
+        return syncManager.lastError
+    }
+    
+    /**
+     * Obtiene el contador de tareas sincronizadas
+     */
+    fun getSyncedTasksCount(): StateFlow<Int> {
+        return syncManager.syncedTasksCount
+    }
+    
+    /**
+     * Fuerza una sincronización manual
+     */
+    suspend fun forceSyncNow(): Result<Int> {
+        val currentUser = auth.currentUser
+        return if (currentUser != null) {
+            syncManager.forceSyncNow(currentUser.uid)
+        } else {
+            Result.failure(Exception("Usuario no autenticado"))
+        }
+    }
+    
+    /**
+     * Reinicia la sincronización (útil para reconexión)
+     */
+    fun restartSync() {
+        syncManager.restartSync()
+    }
+    
+    /**
+     * Sincroniza tareas con manejo de conflictos
+     */
+    suspend fun syncTasksWithConflictResolution(
+        localTasks: List<TaskEntity>,
+        remoteTasks: List<TaskEntity>
+    ): ConflictResolutionResult {
+        return syncManager.syncTasksWithConflictResolution(localTasks, remoteTasks)
+    }
+    
+    /**
+     * Obtiene conflictos pendientes
+     */
+    suspend fun getPendingConflicts(): List<SyncConflict> {
+        return syncManager.getPendingConflicts()
+    }
+    
+    /**
+     * Resuelve un conflicto manualmente
+     */
+    suspend fun resolveConflictManually(
+        conflictId: String,
+        resolution: ConflictResolution,
+        mergedTask: TaskEntity? = null
+    ): Boolean {
+        return syncManager.resolveConflictManually(conflictId, resolution, mergedTask)
     }
     
     /**
@@ -260,7 +337,7 @@ class TaskRepository(
     }
     
     /**
-     * Sincroniza tareas en segundo plano
+     * Sincroniza tareas en segundo plano con detección automática de conflictos
      */
     private suspend fun syncTasksInBackground(
         localTasks: List<TaskEntity>,
@@ -268,6 +345,16 @@ class TaskRepository(
         userId: String
     ) {
         try {
+            // Detectar conflictos automáticamente
+            val conflictResult = syncManager.detectConflictsAutomatically(localTasks, firestoreTasks)
+            
+            if (conflictResult.conflicts.isNotEmpty()) {
+                Log.w(TAG, "Conflictos detectados durante sincronización automática: ${conflictResult.conflicts.size}")
+                // Los conflictos se manejarán en la UI a través del estado de sincronización
+                return
+            }
+            
+            // Si no hay conflictos, proceder con la sincronización normal
             // Encontrar tareas que están en Firestore pero no en Room
             val localTaskIds = localTasks.map { it.id }.toSet()
             val tasksToAddLocally = firestoreTasks.filter { it.id !in localTaskIds }
@@ -279,6 +366,16 @@ class TaskRepository(
                     Log.d(TAG, "Tarea sincronizada localmente: ${task.title}")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error sincronizando tarea localmente", e)
+                }
+            }
+            
+            // Procesar tareas resueltas si las hay
+            conflictResult.resolvedTasks.forEach { task ->
+                try {
+                    taskDao.updateTask(task)
+                    Log.d(TAG, "Tarea resuelta actualizada: ${task.title}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error actualizando tarea resuelta", e)
                 }
             }
             

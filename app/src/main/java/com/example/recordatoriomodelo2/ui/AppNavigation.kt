@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.recordatoriomodelo2.ui.TasksViewModel
+import com.example.recordatoriomodelo2.ui.components.ConflictDialog
+import com.example.recordatoriomodelo2.data.sync.ConflictResolution
 import com.example.recordatoriomodelo2.data.local.TaskEntity
 import com.example.recordatoriomodelo2.viewmodel.AuthViewModelFactory
 import com.example.recordatoriomodelo2.viewmodel.AuthViewModel
@@ -87,6 +89,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import com.example.recordatoriomodelo2.firebase.FirebaseManager
+import com.example.recordatoriomodelo2.ui.components.OfflineStatusBar
 import kotlinx.coroutines.launch
 
 data class UserProfile(
@@ -164,7 +167,17 @@ fun AppNavigation() {
         }
     }
     
-    NavHost(navController = navController, startDestination = startDestination) {
+    // Estructura principal con barra de estado offline
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Barra de estado offline en la parte superior
+        OfflineStatusBar()
+        
+        // Contenido principal de navegación
+        NavHost(
+            navController = navController, 
+            startDestination = startDestination,
+            modifier = Modifier.fillMaxSize()
+        ) {
         composable(Screen.SelectorAuth.route) { SelectorAuthScreen(navController) }
         composable(Screen.Login.route) {
             LoginScreen(navController)
@@ -211,6 +224,7 @@ fun AppNavigation() {
         }
         composable(Screen.FirstLogin.route) {
             com.example.recordatoriomodelo2.ui.screens.auth.FirstLoginScreen(navController)
+        }
         }
     }
 }
@@ -1124,6 +1138,8 @@ fun LoginScreen(navController: NavHostController) {
 fun TasksScreen(navController: NavHostController) {
     val viewModel: TasksViewModel = viewModel()
     val tasks by viewModel.tasksOrdered.collectAsState(initial = emptyList())
+    val uiState by viewModel.uiState.collectAsState()
+    var showConflictDialog by remember { mutableStateOf(false) }
     
     Column(
         modifier = Modifier
@@ -1241,6 +1257,18 @@ fun TasksScreen(navController: NavHostController) {
                 modifier = Modifier.size(24.dp)
             )
         }
+    }
+    
+    // Diálogo de conflictos
+    if (showConflictDialog && uiState.pendingConflicts.isNotEmpty()) {
+        ConflictDialog(
+            conflicts = uiState.pendingConflicts,
+            onDismiss = { showConflictDialog = false },
+            onResolveConflict = { conflictId, resolution, mergedTask ->
+                viewModel.resolveConflict(conflictId, resolution, mergedTask)
+                showConflictDialog = false
+            }
+        )
     }
 }
 

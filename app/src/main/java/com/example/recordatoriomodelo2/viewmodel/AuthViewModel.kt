@@ -6,6 +6,8 @@ import com.example.recordatoriomodelo2.firebase.FirebaseManager
 import com.example.recordatoriomodelo2.services.EmailService
 import com.example.recordatoriomodelo2.services.SessionPersistenceService
 import com.example.recordatoriomodelo2.services.SessionInfo
+import com.example.recordatoriomodelo2.services.ConnectivityService
+import com.example.recordatoriomodelo2.services.OfflineSessionService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,7 +24,8 @@ data class AuthUiState(
     val successMessage: String? = null,
     val temporaryPassword: String? = null,
     val showPasswordDialog: Boolean = false,
-    val isFirstLogin: Boolean = false
+    val isFirstLogin: Boolean = false,
+    val isOfflineMode: Boolean = false
 )
 
 data class ValidationResult(
@@ -38,6 +41,12 @@ class AuthViewModel(private val context: Context? = null) : ViewModel() {
     private val sessionPersistenceService: SessionPersistenceService? = 
         context?.let { SessionPersistenceService.getInstance(it) }
     
+    private val connectivityService: ConnectivityService? = 
+        context?.let { ConnectivityService.getInstance(it) }
+    
+    private val offlineSessionService: OfflineSessionService? = 
+        context?.let { OfflineSessionService.getInstance(it) }
+    
     init {
         // Intentar auto-login si está habilitado
         context?.let { attemptAutoLogin(it) }
@@ -46,36 +55,73 @@ class AuthViewModel(private val context: Context? = null) : ViewModel() {
     private fun attemptAutoLogin(context: Context) {
         viewModelScope.launch {
             Log.d("AuthViewModel", "Iniciando attemptAutoLogin")
-            sessionPersistenceService?.attemptAutoLogin()?.let { result ->
-                Log.d("AuthViewModel", "Resultado de attemptAutoLogin: isSuccess=${result.isSuccess}, data=${result.getOrNull()}")
-                if (result.isSuccess) {
-                    val userId = result.getOrNull()
-                    if (userId != null) {
-                        _uiState.value = _uiState.value.copy(
-                            isLoggedIn = true
-                            // No mostrar mensaje de éxito para auto-login
-                        )
-                        Log.d("AuthViewModel", "Auto-login exitoso para userId: $userId")
+            
+            // Verificar conectividad
+            val isConnected = connectivityService?.isCurrentlyConnected() ?: false
+            Log.d("AuthViewModel", "Estado de conectividad: $isConnected")
+            
+            if (isConnected) {
+                // Modo online: intentar auto-login normal con Firebase
+                sessionPersistenceService?.attemptAutoLogin()?.let { result ->
+                    Log.d("AuthViewModel", "Resultado de attemptAutoLogin: isSuccess=${result.isSuccess}, data=${result.getOrNull()}")
+                    if (result.isSuccess) {
+                        val userId = result.getOrNull()
+                        if (userId != null) {
+                            // Guardar sesión para uso offline
+                            val sessionInfo = sessionPersistenceService?.getCurrentSessionInfo()
+                            sessionInfo?.let { info ->
+                                // Obtener email del usuario actual de Firebase
+                                val currentUser = FirebaseManager.getCurrentUser()
+                                offlineSessionService?.saveUserSession(
+                                    userEmail = currentUser?.email ?: "",
+                                    userId = info.userId,
+                                    userName = currentUser?.displayName ?: ""
+                                )
+                            }
+                            
+                            _uiState.value = _uiState.value.copy(
+                                isLoggedIn = true,
+                                isOfflineMode = false
+                            )
+                            Log.d("AuthViewModel", "Auto-login online exitoso para userId: $userId")
+                        } else {
+                            attemptOfflineLogin()
+                        }
                     } else {
-                        _uiState.value = _uiState.value.copy(
-                            isLoggedIn = false
-                        )
-                        Log.d("AuthViewModel", "Auto-login devolvió null - no hay sesión válida")
+                        attemptOfflineLogin()
                     }
-                } else {
-                    // Auto-login falló, mantener en pantalla de login
-                    _uiState.value = _uiState.value.copy(
-                        isLoggedIn = false
-                    )
-                    Log.d("AuthViewModel", "Auto-login falló: ${result.exceptionOrNull()?.message}")
+                } ?: run {
+                    attemptOfflineLogin()
                 }
-            } ?: run {
-                // No hay servicio de persistencia o no hay sesión guardada
-                _uiState.value = _uiState.value.copy(
-                    isLoggedIn = false
-                )
-                Log.d("AuthViewModel", "No hay servicio de persistencia")
+            } else {
+                // Modo offline: verificar sesión local
+                attemptOfflineLogin()
             }
+        }
+    }
+    
+    private fun attemptOfflineLogin() {
+        Log.d("AuthViewModel", "Intentando login offline")
+        
+        val offlineSession = offlineSessionService?.getOfflineSession()
+        val hasValidSession = offlineSessionService?.hasValidOfflineSession() ?: false
+        
+        if (hasValidSession && offlineSession != null) {
+            // Activar modo offline
+            offlineSessionService?.setOfflineMode(true)
+            
+            _uiState.value = _uiState.value.copy(
+                isLoggedIn = true,
+                isOfflineMode = true,
+                successMessage = "Accediendo en modo offline"
+            )
+            Log.d("AuthViewModel", "Login offline exitoso para usuario: ${offlineSession.userEmail}")
+        } else {
+            _uiState.value = _uiState.value.copy(
+                isLoggedIn = false,
+                isOfflineMode = false
+            )
+            Log.d("AuthViewModel", "No hay sesión offline válida disponible")
         }
     }
     
@@ -289,6 +335,13 @@ class AuthViewModel(private val context: Context? = null) : ViewModel() {
                         sessionPersistenceService?.configureSessionPersistence(user.uid)
                     }
                     
+                    // Guardar sesión para uso offline
+                    offlineSessionService?.saveUserSession(
+                        userEmail = email,
+                        userId = user.uid,
+                        userName = user.displayName ?: email.substringBefore("@")
+                    )
+                    
                     // Verificar si es el primer login
                     FirebaseManager.isFirstLogin()
                         .onSuccess { isFirstLogin ->
@@ -296,6 +349,7 @@ class AuthViewModel(private val context: Context? = null) : ViewModel() {
                                 isLoading = false,
                                 isLoggedIn = true,
                                 isFirstLogin = isFirstLogin,
+                                isOfflineMode = false,
                                 successMessage = "Inicio de sesión exitoso"
                             )
                         }
@@ -305,6 +359,7 @@ class AuthViewModel(private val context: Context? = null) : ViewModel() {
                                 isLoading = false,
                                 isLoggedIn = true,
                                 isFirstLogin = false,
+                                isOfflineMode = false,
                                 successMessage = "Inicio de sesión exitoso"
                             )
                         }
@@ -594,11 +649,15 @@ class AuthViewModel(private val context: Context? = null) : ViewModel() {
             // Limpiar persistencia de sesión
             sessionPersistenceService?.clearSessionData()
             
+            // Limpiar sesión offline
+            offlineSessionService?.clearOfflineSession()
+            
             // Cerrar sesión en Firebase
             FirebaseManager.signOut()
             
             _uiState.value = _uiState.value.copy(
                 isLoggedIn = false,
+                isOfflineMode = false,
                 successMessage = "Sesión cerrada exitosamente"
             )
             
