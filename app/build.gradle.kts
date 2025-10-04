@@ -172,7 +172,20 @@ fun getVersionName(): String {
                             "2.2.2" // Fallback basado en tu contexto actual
                         }
                     }
-                    branchName.contains("feature/hu-3") -> "2.3.1"
+                    branchName.contains("feature/hu-3") -> {
+                        // Estamos en HU-3, contar commits específicos de esta rama
+                        val featureCommitsProcess = ProcessBuilder("git", "rev-list", "--count", "HEAD", "^origin/main")
+                            .directory(rootDir)
+                            .start()
+                        val featureCommits = featureCommitsProcess.inputStream.bufferedReader().readText().trim()
+                        featureCommitsProcess.waitFor()
+                        
+                        if (featureCommitsProcess.exitValue() == 0 && featureCommits.isNotEmpty()) {
+                            "2.3.${featureCommits}"
+                        } else {
+                            "2.3.11" // Fallback basado en el contexto actual
+                        }
+                    }
                     branchName.contains("feature/hu-4") -> "2.4.1"
                     branchName.contains("main") || branchName.contains("master") -> "2.0.0"
                     else -> "2.2.2" // Fallback para HU-2 actual
