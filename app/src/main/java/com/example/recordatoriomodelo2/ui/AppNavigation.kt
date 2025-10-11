@@ -1,5 +1,6 @@
 package com.example.recordatoriomodelo2.ui
 
+import android.util.Log
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -15,7 +16,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.recordatoriomodelo2.ui.TasksViewModel
+import com.example.recordatoriomodelo2.ui.components.ConflictDialog
+import com.example.recordatoriomodelo2.data.sync.ConflictResolution
 import com.example.recordatoriomodelo2.data.local.TaskEntity
+import com.example.recordatoriomodelo2.viewmodel.AuthViewModelFactory
+import com.example.recordatoriomodelo2.viewmodel.AuthViewModel
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.Icons
@@ -50,7 +56,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import java.util.Calendar
 import android.app.TimePickerDialog
 import androidx.compose.ui.platform.LocalContext
-import android.util.Log
 import java.net.HttpURLConnection
 import java.net.URL
 import org.json.JSONObject
@@ -84,6 +89,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import com.example.recordatoriomodelo2.firebase.FirebaseManager
+import com.example.recordatoriomodelo2.ui.components.OfflineStatusBar
 import kotlinx.coroutines.launch
 
 data class UserProfile(
@@ -114,7 +120,64 @@ sealed class Screen(val route: String) {
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = Screen.Login.route) {
+    val context = LocalContext.current
+    
+    // Obtener el AuthViewModel usando el factory
+    val authViewModel: AuthViewModel = viewModel(
+        factory = AuthViewModelFactory(context)
+    )
+    
+    // Observar el estado de autenticación
+    val authState by authViewModel.uiState.collectAsState()
+    
+    // Siempre iniciar en Login - la navegación automática se manejará después
+    val startDestination = Screen.Login.route
+    
+    // Efecto para manejar cambios en el estado de autenticación
+    LaunchedEffect(authState.isLoggedIn, authState.successMessage) {
+        Log.d("AppNavigation", "LaunchedEffect ejecutado - isLoggedIn: ${authState.isLoggedIn}")
+        Log.d("AppNavigation", "successMessage: ${authState.successMessage}")
+        Log.d("AppNavigation", "Ruta actual: ${navController.currentDestination?.route}")
+        
+        if (authState.isLoggedIn) {
+            // Usuario logueado - navegar a Home si no está ya ahí
+            if (navController.currentDestination?.route != Screen.Home.route) {
+                Log.d("AppNavigation", "Navegando a Home desde ${navController.currentDestination?.route}")
+                navController.navigate(Screen.Home.route) {
+                    popUpTo(Screen.Login.route) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        } else {
+            // Usuario no logueado - navegar a Login si no está ya ahí
+            if (navController.currentDestination?.route != Screen.Login.route) {
+                Log.d("AppNavigation", "Navegando a Login desde ${navController.currentDestination?.route}")
+                navController.navigate(Screen.Login.route) {
+                    popUpTo(0) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
+        
+        // Limpiar mensaje de logout después de un tiempo
+        if (authState.successMessage == "Sesión cerrada exitosamente") {
+            Log.d("AppNavigation", "Limpiando mensaje de logout después de 1 segundo")
+            kotlinx.coroutines.delay(1000)
+            authViewModel.clearMessages()
+        }
+    }
+    
+    // Estructura principal con barra de estado offline
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Barra de estado offline en la parte superior
+        OfflineStatusBar()
+        
+        // Contenido principal de navegación
+        NavHost(
+            navController = navController, 
+            startDestination = startDestination,
+            modifier = Modifier.fillMaxSize()
+        ) {
         composable(Screen.SelectorAuth.route) { SelectorAuthScreen(navController) }
         composable(Screen.Login.route) {
             LoginScreen(navController)
@@ -122,7 +185,7 @@ fun AppNavigation() {
         composable(Screen.GoogleLogin.route) {
             val viewModel: com.example.recordatoriomodelo2.ui.screens.login.LoginViewModel = viewModel()
             val state by viewModel.state.collectAsState()
-            com.example.recordatoriomodelo2.ui.screens.login.LoginScreen(
+            com.example.recordatoriomodelo2.ui.screens.login.GoogleLoginScreen(
                 navController = navController,
                 user = state.user,
                 onUserChange = { viewModel.onEvent(com.example.recordatoriomodelo2.ui.screens.login.LoginEvent.UserChanged(it)) },
@@ -141,7 +204,7 @@ fun AppNavigation() {
             )
         }
         composable(Screen.Home.route) {
-            HomeScreen(navController)
+            HomeScreen(navController, authViewModel)
         }
         composable(Screen.Tasks.route) {
             TasksScreen(navController)
@@ -162,11 +225,12 @@ fun AppNavigation() {
         composable(Screen.FirstLogin.route) {
             com.example.recordatoriomodelo2.ui.screens.auth.FirstLoginScreen(navController)
         }
+        }
     }
 }
 
 @Composable
-fun HomeScreen(navController: NavHostController) {
+fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel) {
     val viewModel: TasksViewModel = viewModel()
     val tasks by viewModel.tasksOrdered.collectAsState(initial = emptyList())
     val context = LocalContext.current
@@ -597,24 +661,9 @@ fun HomeScreen(navController: NavHostController) {
     Box(modifier = Modifier.fillMaxSize()) {
         FloatingActionButton(
             onClick = {
-                // Cerrar sesión de Firebase Auth
-                com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
-                
-                // Cerrar sesión de Google Sign-In
-                val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
-                    .requestEmail()
-                    .build()
-                val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
-                googleSignInClient.signOut().addOnCompleteListener { task ->
-                    if (task.isSuccessful) {
-                        Toast.makeText(context, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show()
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(Screen.Home.route) { inclusive = true }
-                        }
-                    } else {
-                        Toast.makeText(context, "Error al cerrar sesión", Toast.LENGTH_SHORT).show()
-                    }
-                }
+                // Usar el AuthViewModel para cerrar sesión correctamente
+                authViewModel.signOut()
+                Toast.makeText(context, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show()
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -857,10 +906,17 @@ fun SelectorAuthScreen(navController: NavHostController) {
 
 @Composable
 fun LoginScreen(navController: NavHostController) {
-    val authViewModel: com.example.recordatoriomodelo2.viewmodel.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val context = LocalContext.current
+    val authViewModel: com.example.recordatoriomodelo2.viewmodel.AuthViewModel = viewModel(
+        factory = AuthViewModelFactory(context)
+    )
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    
+    // Estado para el diálogo de recuperación de contraseña
+    var showPasswordResetDialog by remember { mutableStateOf(false) }
+    var resetEmail by remember { mutableStateOf("") }
     
     val uiState by authViewModel.uiState.collectAsState()
     
@@ -979,9 +1035,8 @@ fun LoginScreen(navController: NavHostController) {
             // Botón para restablecer contraseña
             TextButton(
                 onClick = {
-                    if (email.isNotEmpty()) {
-                        authViewModel.sendPasswordResetEmail(email)
-                    }
+                    showPasswordResetDialog = true
+                    resetEmail = email // Pre-llenar con el email del login si existe
                 }
             ) {
                 Text("¿Olvidaste tu contraseña?")
@@ -1021,12 +1076,70 @@ fun LoginScreen(navController: NavHostController) {
             }
         }
     }
+    
+    // Diálogo de recuperación de contraseña
+    if (showPasswordResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showPasswordResetDialog = false },
+            title = { Text("Recuperar Contraseña") },
+            text = {
+                Column {
+                    Text("Ingresa tu email para recibir un enlace de recuperación:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = resetEmail,
+                        onValueChange = { resetEmail = it },
+                        label = { Text("Email") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    // Mostrar mensajes de error o éxito
+                    uiState.errorMessage?.let { message ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    
+                    uiState.successMessage?.let { message ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = message,
+                            color = androidx.compose.ui.graphics.Color(0xFF2E7D32),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        authViewModel.sendPasswordResetEmail(resetEmail)
+                        showPasswordResetDialog = false
+                    }
+                ) {
+                    Text("Enviar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showPasswordResetDialog = false }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 @Composable
 fun TasksScreen(navController: NavHostController) {
     val viewModel: TasksViewModel = viewModel()
     val tasks by viewModel.tasksOrdered.collectAsState(initial = emptyList())
+    val uiState by viewModel.uiState.collectAsState()
+    var showConflictDialog by remember { mutableStateOf(false) }
     
     Column(
         modifier = Modifier
@@ -1144,6 +1257,18 @@ fun TasksScreen(navController: NavHostController) {
                 modifier = Modifier.size(24.dp)
             )
         }
+    }
+    
+    // Diálogo de conflictos
+    if (showConflictDialog && uiState.pendingConflicts.isNotEmpty()) {
+        ConflictDialog(
+            conflicts = uiState.pendingConflicts,
+            onDismiss = { showConflictDialog = false },
+            onResolveConflict = { conflictId, resolution, mergedTask ->
+                viewModel.resolveConflict(conflictId, resolution, mergedTask)
+                showConflictDialog = false
+            }
+        )
     }
 }
 
