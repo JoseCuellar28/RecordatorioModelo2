@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.CloudDownload
 import kotlinx.coroutines.launch
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
@@ -72,6 +73,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.geometry.Offset
 import android.widget.Toast
 import com.example.recordatoriomodelo2.ui.screens.login.PruebaAuthScreen
+import com.example.recordatoriomodelo2.ui.GoogleClassroomImportScreen
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
@@ -112,8 +114,9 @@ sealed class Screen(val route: String) {
     object Home : Screen("home")
     object Tasks : Screen("tasks")
     object AddTask : Screen("add_task?taskId={taskId}") {
-        fun createRoute(taskId: Int?) = if (taskId != null) "add_task?taskId=$taskId" else "add_task"
+        fun createRoute(taskId: Int?) = "add_task?taskId=${taskId ?: -1}"
     }
+    object GoogleClassroomImport : Screen("google_classroom_import")
     object Profile : Screen("profile")
 }
 
@@ -216,6 +219,9 @@ fun AppNavigation() {
             val taskId = backStackEntry.arguments?.getInt("taskId")?.takeIf { it != -1 }
             AddTaskScreen(navController, taskId)
         }
+        composable(Screen.GoogleClassroomImport.route) {
+            GoogleClassroomImportScreen(navController)
+        }
         composable(Screen.Profile.route) {
             ProfileScreen(navController)
         }
@@ -236,7 +242,6 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel) {
     val context = LocalContext.current
     
     // Estado para el diálogo de importación
-    var showImportDialog by remember { mutableStateOf(false) }
     var classroomCourses by remember { mutableStateOf<List<com.example.recordatoriomodelo2.ui.screens.login.ClassroomCourse>>(emptyList()) }
     var showCourseDialog by remember { mutableStateOf(false) }
     var selectedCourseTasks by remember { mutableStateOf<List<com.example.recordatoriomodelo2.ui.screens.login.ClassroomTask>>(emptyList()) }
@@ -461,13 +466,7 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel) {
             subtitle = "Sincronizar tareas de Google Classroom",
             icon = Icons.Filled.Info,
             onClick = {
-                val account = com.google.android.gms.auth.api.signin.GoogleSignIn.getLastSignedInAccount(context)
-                if (account == null) {
-                    // Mostrar mensaje de advertencia
-                    Toast.makeText(context, "Debes iniciar sesión con Google para importar tareas de Classroom", Toast.LENGTH_LONG).show()
-                } else {
-                    showImportDialog = true
-                }
+                navController.navigate(Screen.GoogleClassroomImport.route)
             },
             modifier = Modifier.fillMaxWidth(),
             bgColor = androidx.compose.ui.graphics.Color(0xFFEF4444), // Rojo vibrante
@@ -476,50 +475,7 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel) {
         )
         Spacer(modifier = Modifier.height(32.dp))
     }
-    
-    // Diálogo de confirmación para importar
-    if (showImportDialog) {
-        AlertDialog(
-            onDismissRequest = { showImportDialog = false },
-            containerColor = androidx.compose.ui.graphics.Color(0xFFFFFFFF), // Fondo blanco puro
-            titleContentColor = androidx.compose.ui.graphics.Color(0xFF1E293B), // Texto azul marino
-            textContentColor = androidx.compose.ui.graphics.Color(0xFF1E293B), // Texto azul marino
-            title = { Text("Importar de Google Classroom") },
-            text = { Text("¿Deseas importar tareas desde Google Classroom?") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showImportDialog = false
-                        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                            .requestEmail()
-                            .requestScopes(
-                                Scope("https://www.googleapis.com/auth/classroom.courses.readonly"),
-                                Scope("https://www.googleapis.com/auth/classroom.coursework.me.readonly"),
-                                Scope("https://www.googleapis.com/auth/classroom.coursework.students.readonly")
-                            )
-                            .build()
-                        val googleSignInClient = GoogleSignIn.getClient(context, gso)
-                        launcher.launch(googleSignInClient.signInIntent)
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = androidx.compose.ui.graphics.Color(0xFFEF4444) // Rojo vibrante
-                    )
-                ) {
-                    Text("Importar", color = androidx.compose.ui.graphics.Color.White)
-                }
-            },
-            dismissButton = {
-                Button(
-                    onClick = { showImportDialog = false },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = androidx.compose.ui.graphics.Color(0xFF1E293B) // Azul marino
-                    )
-                ) {
-                    Text("Cancelar", color = androidx.compose.ui.graphics.Color.White)
-                }
-            }
-        )
-    }
+
     
     // Diálogo de selección de curso
     if (showCourseDialog && classroomCourses.isNotEmpty()) {

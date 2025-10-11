@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.recordatoriomodelo2"
         minSdk = 24
         targetSdk = 36
-        versionCode = getVersionCode()
-        versionName = getVersionName()
+        versionCode = 243
+        versionName = "2.4.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -98,104 +98,4 @@ dependencies {
     
     // JSON parsing
     implementation("com.google.code.gson:gson:2.10.1")
-}
-
-// Funciones para manejo automático de versiones
-fun getVersionCode(): Int {
-    return try {
-        val process = ProcessBuilder("git", "rev-list", "--count", "HEAD")
-            .directory(rootDir)
-            .start()
-        val output = process.inputStream.bufferedReader().readText().trim()
-        process.waitFor()
-        if (process.exitValue() == 0) {
-            output.toInt()
-        } else {
-            1 // Fallback si no hay git
-        }
-    } catch (e: Exception) {
-        println("Error obteniendo version code: ${e.message}")
-        1 // Fallback en caso de error
-    }
-}
-
-fun getVersionName(): String {
-    return try {
-        // Intentar obtener el último tag de git
-        val tagProcess = ProcessBuilder("git", "describe", "--tags", "--abbrev=0")
-            .directory(rootDir)
-            .start()
-        val tagOutput = tagProcess.inputStream.bufferedReader().readText().trim()
-        tagProcess.waitFor()
-        
-        if (tagProcess.exitValue() == 0 && tagOutput.isNotEmpty()) {
-            // Si hay un tag, usarlo como base
-            val commitProcess = ProcessBuilder("git", "rev-list", "--count", "$tagOutput..HEAD")
-                .directory(rootDir)
-                .start()
-            val commitCount = commitProcess.inputStream.bufferedReader().readText().trim()
-            commitProcess.waitFor()
-            
-            if (commitProcess.exitValue() == 0 && commitCount.toInt() > 0) {
-                "$tagOutput-dev.$commitCount"
-            } else {
-                tagOutput
-            }
-        } else {
-            // Formato basado en el contexto del proyecto:
-            // Versión 2 (rediseño), Historia 2 (HU-2), commits en la rama
-            val branchProcess = ProcessBuilder("git", "rev-parse", "--abbrev-ref", "HEAD")
-                .directory(rootDir)
-                .start()
-            val branchName = branchProcess.inputStream.bufferedReader().readText().trim()
-            branchProcess.waitFor()
-            
-            val commitProcess = ProcessBuilder("git", "rev-list", "--count", "HEAD")
-                .directory(rootDir)
-                .start()
-            val totalCommits = commitProcess.inputStream.bufferedReader().readText().trim()
-            commitProcess.waitFor()
-            
-            if (branchProcess.exitValue() == 0 && commitProcess.exitValue() == 0) {
-                when {
-                    branchName.contains("feature/hu-2") -> {
-                        // Estamos en HU-2, contar commits específicos de esta rama
-                        val featureCommitsProcess = ProcessBuilder("git", "rev-list", "--count", "HEAD", "^origin/main")
-                            .directory(rootDir)
-                            .start()
-                        val featureCommits = featureCommitsProcess.inputStream.bufferedReader().readText().trim()
-                        featureCommitsProcess.waitFor()
-                        
-                        if (featureCommitsProcess.exitValue() == 0 && featureCommits.isNotEmpty()) {
-                            "2.2.${featureCommits}"
-                        } else {
-                            "2.2.2" // Fallback basado en tu contexto actual
-                        }
-                    }
-                    branchName.contains("feature/hu-3") -> {
-                        // Estamos en HU-3, contar commits específicos de esta rama
-                        val featureCommitsProcess = ProcessBuilder("git", "rev-list", "--count", "HEAD", "^origin/main")
-                            .directory(rootDir)
-                            .start()
-                        val featureCommits = featureCommitsProcess.inputStream.bufferedReader().readText().trim()
-                        featureCommitsProcess.waitFor()
-                        
-                        if (featureCommitsProcess.exitValue() == 0 && featureCommits.isNotEmpty()) {
-                            "2.3.${featureCommits}"
-                        } else {
-                            "2.3.11" // Fallback basado en el contexto actual
-                        }
-                    }
-                    branchName.contains("feature/hu-4") -> "2.4.1"
-                    branchName.contains("main") || branchName.contains("master") -> "2.0.0"
-                    else -> "2.2.2" // Fallback para HU-2 actual
-                }
-            } else {
-                "2.2.2" // Fallback basado en tu contexto actual
-            }
-        }
-    } catch (e: Exception) {
-        println("Error obteniendo version name: ${e.message}")
-        "2.2.2" // Fallback basado en tu contexto actual
-    }
 }

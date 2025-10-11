@@ -205,6 +205,52 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun insertTaskFromClassroom(title: String, subject: String, dueDate: String, classroomId: String, reminderAt: String? = null) {
+        viewModelScope.launch {
+            val userId = _currentUserId.value
+            Log.d("TasksViewModel", "=== INICIO insertTaskFromClassroom ===")
+            Log.d("TasksViewModel", "Usuario actual: $userId, classroomId: $classroomId")
+            
+            if (userId == null) {
+                Log.e("TasksViewModel", "No hay usuario autenticado para crear tarea")
+                return@launch
+            }
+            
+            try {
+                val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+                val now = dateFormat.format(Date())
+                val task = TaskEntity(
+                    title = title, 
+                    subject = subject, 
+                    dueDate = dueDate, 
+                    createdAt = now, 
+                    reminderAt = reminderAt,
+                    classroomId = classroomId,
+                    userId = userId
+                )
+                
+                Log.d("TasksViewModel", "Tarea de Classroom creada - userId: ${task.userId}, classroomId: ${task.classroomId}, title: ${task.title}")
+                
+                // Insertar con sincronización automática usando el nuevo sistema
+                val result = taskRepository.insertTask(task)
+                
+                if (result.isSuccess) {
+                    Log.d("TasksViewModel", "Tarea de Classroom insertada exitosamente en repository")
+                } else {
+                    Log.e("TasksViewModel", "Error al insertar tarea de Classroom en repository: ${result.exceptionOrNull()?.message}")
+                }
+                
+                if (!reminderAt.isNullOrEmpty()) {
+                    scheduleTaskReminder(getApplication(), title, subject, reminderAt)
+                }
+                
+                Log.d("TasksViewModel", "Tarea de Classroom insertada y sincronizada: $title")
+            } catch (e: Exception) {
+                Log.e("TasksViewModel", "Error al insertar tarea de Classroom", e)
+            }
+        }
+    }
+
     fun updateTask(task: TaskEntity) {
         viewModelScope.launch {
             try {
@@ -451,6 +497,18 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     
+    /**
+     * Obtiene todas las tareas del usuario actual
+     */
+    suspend fun getAllTasks(): List<TaskEntity> {
+        val userId = _currentUserId.value
+        return if (userId != null) {
+            taskDao.getTasksByUser(userId).first()
+        } else {
+            emptyList()
+        }
+    }
+
     /**
      * Sincroniza tareas con manejo de conflictos
      */
