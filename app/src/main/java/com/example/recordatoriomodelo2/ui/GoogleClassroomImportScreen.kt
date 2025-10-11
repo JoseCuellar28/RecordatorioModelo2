@@ -28,6 +28,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -342,6 +343,14 @@ fun GoogleClassroomImportScreen(navController: NavHostController) {
         }
     }
     
+    // Manejar el botón de atrás del sistema
+    BackHandler(enabled = !showCourseSelection) {
+        // Si estamos en la pantalla de seleccionar tareas, volver a seleccionar cursos
+        showCourseSelection = true
+        selectedTasks = emptySet()
+        courseTasks = emptyList()
+    }
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -411,29 +420,12 @@ fun GoogleClassroomImportScreen(navController: NavHostController) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (showCourseSelection) "Importar desde Google Classroom" else "Seleccionar Tareas",
+                    text = if (showCourseSelection) "Selecciona una clase" else "Seleccionar Tareas",
                     style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                    color = androidx.compose.ui.graphics.Color(0xFFEF4444)
+                    color = androidx.compose.ui.graphics.Color(0xFF4285F4)
                 )
             
             Row {
-                if (!showCourseSelection) {
-                    // Botón para volver a la selección de cursos
-                    IconButton(
-                        onClick = { 
-                            showCourseSelection = true
-                            selectedTasks = emptySet()
-                            courseTasks = emptyList()
-                        }
-                    ) {
-                        Icon(
-                            Icons.Filled.ArrowForward,
-                            contentDescription = "Volver a cursos",
-                            tint = androidx.compose.ui.graphics.Color(0xFF1E293B)
-                        )
-                    }
-                }
-                
                 // Botón para cambiar cuenta de Google
                 IconButton(
                     onClick = { changeGoogleAccount() }
