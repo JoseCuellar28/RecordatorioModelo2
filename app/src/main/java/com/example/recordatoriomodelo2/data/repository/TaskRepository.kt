@@ -43,8 +43,12 @@ class TaskRepository(
     private val securityMiddleware: SecurityMiddleware by lazy { SecurityMiddleware.getInstance(context) }
     private val syncManager: SyncManager by lazy { SyncManager.getInstance(context) }
     
+    // Registro temporal de tareas eliminadas recientemente para evitar resurrección
+    private val recentlyDeletedTasks = mutableSetOf<Int>()
+    private val deletionTimestamps = mutableMapOf<Int, Long>()
+    
     companion object {
-        private const val TAG = "TaskRepository"
+        private const val TAG = "🔍DEBUG_TaskRepo"
         private const val TASKS_COLLECTION = "tasks"
     }
     
@@ -55,18 +59,48 @@ class TaskRepository(
     fun getTasksForCurrentUser(): Flow<List<TaskEntity>> {
         val currentUser = auth.currentUser
         return if (currentUser != null) {
+            Log.d(TAG, "🔄 Iniciando getTasksForCurrentUser para usuario: ${currentUser.uid}")
+            
             // Usar el nuevo SyncManager para sincronización en tiempo real
             combine(
                 getLocalTasks(currentUser.uid),
                 syncManager.startRealtimeSync(currentUser.uid)
             ) { localTasks, firestoreTasks ->
+                Log.d(TAG, "📊 COMBINE TRIGGERED:")
+                Log.d(TAG, "  📱 Local tasks: ${localTasks.size} tareas")
+                Log.d(TAG, "  ☁️ Firestore tasks: ${firestoreTasks.size} tareas")
+                Log.d(TAG, "  🗑️ Recently deleted: ${recentlyDeletedTasks.size} tareas")
+                
+                // Log detalles de las tareas
+                localTasks.forEach { task ->
+                    Log.d(TAG, "  📱 Local: ID=${task.id}, title='${task.title}', deleted=${recentlyDeletedTasks.contains(task.id)}")
+                }
+                firestoreTasks.forEach { task ->
+                    val isDeleted = recentlyDeletedTasks.contains(task.id)
+                    Log.d(TAG, "  ☁️ Firestore: ID=${task.id}, title='${task.title}', deleted=$isDeleted")
+                    
+                    // ⚠️ ALERTA ESPECIAL: Tarea eliminada que aparece en Firestore
+                    if (isDeleted) {
+                        Log.w(TAG, "  ⚠️ PROBLEMA DETECTADO: Tarea eliminada ID=${task.id} aparece en Firestore!")
+                        Log.w(TAG, "  ⚠️ Timestamp eliminación: ${deletionTimestamps[task.id]}")
+                        Log.w(TAG, "  ⚠️ Tiempo transcurrido: ${System.currentTimeMillis() - (deletionTimestamps[task.id] ?: 0)}ms")
+                    }
+                }
+                
                 // Sincronizar automáticamente las diferencias
                 syncTasksInBackground(localTasks, firestoreTasks, currentUser.uid)
                 
                 // Retornar las tareas más actualizadas (priorizar Firestore)
-                mergeTaskLists(localTasks, firestoreTasks)
+                val mergedTasks = mergeTaskLists(localTasks, firestoreTasks)
+                Log.d(TAG, "  ✅ Merged result: ${mergedTasks.size} tareas")
+                mergedTasks.forEach { task ->
+                    Log.d(TAG, "  ✅ Final: ID=${task.id}, title='${task.title}'")
+                }
+                
+                mergedTasks
             }
         } else {
+            Log.w(TAG, "❌ Usuario no autenticado en getTasksForCurrentUser")
             flowOf(emptyList())
         }
     }
@@ -316,14 +350,38 @@ class TaskRepository(
                 return Result.failure(Exception("No autorizado para eliminar esta tarea"))
             }
             
-            // 1. Eliminar de Room
-            taskDao.deleteTask(task)
+            // Registrar la tarea como eliminada recientemente ANTES de eliminarla
+            // Esto evita que el listener la "resucite" durante el proceso
+            val currentTime = System.currentTimeMillis()
+            recentlyDeletedTasks.add(task.id)
+            deletionTimestamps[task.id] = currentTime
             
-            // 2. Eliminar de Firestore
+            // 🎯 NUEVA SOLUCIÓN: Marcar en SyncManager para filtrado inteligente
+            Log.d(TAG, "🎯 LLAMANDO markTaskAsDeleted ANTES de eliminar de Firestore")
+            syncManager.markTaskAsDeleted(task.id)
+            Log.d(TAG, "✅ markTaskAsDeleted completado - tarea protegida contra reaparición")
+            
+            Log.d(TAG, "🗑️ INICIANDO ELIMINACIÓN:")
+            Log.d(TAG, "  📝 Tarea: ID=${task.id}, title='${task.title}'")
+            Log.d(TAG, "  ⏰ Timestamp: $currentTime")
+            Log.d(TAG, "  📊 Recently deleted count: ${recentlyDeletedTasks.size}")
+            Log.d(TAG, "  🔒 Registrada como eliminada recientemente")
+            Log.d(TAG, "  🎯 Marcada en SyncManager para filtrado inteligente")
+            
+            // NUEVO ORDEN: Eliminar de Firestore PRIMERO
+            // Esto evita que el listener reciba la tarea y la "resucite" 
+            val firestoreDocId = generateTaskDocumentId(task)
+            Log.d(TAG, "  ☁️ Eliminando de Firestore (doc: $firestoreDocId)...")
             firestore.collection(TASKS_COLLECTION)
-                .document(generateTaskDocumentId(task))
+                .document(firestoreDocId)
                 .delete()
                 .await()
+            Log.d(TAG, "  ✅ Eliminada de Firestore exitosamente")
+            
+            // Luego eliminar de Room para actualizar la UI
+            Log.d(TAG, "  📱 Eliminando de Room...")
+            taskDao.deleteTask(task)
+            Log.d(TAG, "  ✅ Eliminada de Room exitosamente")
             
             securityMiddleware.logSecurityEvent("DELETE_TASK_SUCCESS", userId, true, "Task ID: ${task.id}")
             Log.d(TAG, "Tarea eliminada exitosamente - ID: ${task.id}")
@@ -332,6 +390,9 @@ class TaskRepository(
         } catch (e: Exception) {
             securityMiddleware.logSecurityEvent("DELETE_TASK_ERROR", task.userId, false, e.message)
             Log.e(TAG, "Error eliminando tarea", e)
+            // Si falla la eliminación, remover del registro de eliminadas
+            recentlyDeletedTasks.remove(task.id)
+            deletionTimestamps.remove(task.id)
             Result.failure(e)
         }
     }
@@ -385,34 +446,67 @@ class TaskRepository(
     }
     
     /**
-     * Combina listas de tareas priorizando datos de Firestore
+     * Combina las listas de tareas locales y remotas, priorizando las eliminaciones locales
+     * y evitando la resurrección de tareas eliminadas recientemente
      */
     private fun mergeTaskLists(localTasks: List<TaskEntity>, firestoreTasks: List<TaskEntity>): List<TaskEntity> {
-        Log.d(TAG, "=== MERGE TASK LISTS ===")
-        Log.d(TAG, "Tareas locales: ${localTasks.size}")
-        localTasks.forEach { task ->
-            Log.d(TAG, "Local: ID=${task.id}, Title='${task.title}', UserId=${task.userId}")
+        Log.d(TAG, "🔄 MERGE TASK LISTS:")
+        Log.d(TAG, "  📱 Local: ${localTasks.size} tareas")
+        Log.d(TAG, "  ☁️ Firestore: ${firestoreTasks.size} tareas")
+        Log.d(TAG, "  🗑️ Recently deleted: ${recentlyDeletedTasks.size} tareas")
+        
+        // Limpiar tareas eliminadas que ya han pasado suficiente tiempo (30 segundos)
+        val currentTime = System.currentTimeMillis()
+        val expiredDeletions = deletionTimestamps.filter { (_, timestamp) ->
+            currentTime - timestamp > 30_000 // 30 segundos
+        }.keys
+        
+        if (expiredDeletions.isNotEmpty()) {
+            Log.d(TAG, "  🧹 Limpiando ${expiredDeletions.size} eliminaciones expiradas")
+            expiredDeletions.forEach { taskId ->
+                recentlyDeletedTasks.remove(taskId)
+                deletionTimestamps.remove(taskId)
+                Log.d(TAG, "    ✅ Expirada: ID=$taskId")
+            }
         }
         
-        Log.d(TAG, "Tareas de Firestore: ${firestoreTasks.size}")
-        firestoreTasks.forEach { task ->
-            Log.d(TAG, "Firestore: ID=${task.id}, Title='${task.title}', UserId=${task.userId}")
+        // Crear un conjunto de IDs de tareas locales para búsqueda rápida
+        val localTaskIds = localTasks.map { it.id }.toSet()
+        Log.d(TAG, "  📋 Local IDs: $localTaskIds")
+        
+        // Filtrar tareas remotas para incluir solo las que existen localmente
+        // y que no han sido eliminadas recientemente
+        val filteredRemoteTasks = firestoreTasks.filter { remoteTask ->
+            val existsLocally = localTaskIds.contains(remoteTask.id)
+            val notRecentlyDeleted = !recentlyDeletedTasks.contains(remoteTask.id)
+            val shouldInclude = existsLocally && notRecentlyDeleted
+            
+            Log.d(TAG, "  ☁️ Remote ID=${remoteTask.id}: existsLocally=$existsLocally, notRecentlyDeleted=$notRecentlyDeleted, include=$shouldInclude")
+            shouldInclude
         }
         
-        val firestoreTaskIds = firestoreTasks.map { it.id }.toSet()
-        val localOnlyTasks = localTasks.filter { it.id !in firestoreTaskIds }
-        
-        Log.d(TAG, "Tareas solo locales (no en Firestore): ${localOnlyTasks.size}")
-        localOnlyTasks.forEach { task ->
-            Log.d(TAG, "Solo local: ID=${task.id}, Title='${task.title}'")
+        // Identificar tareas que solo existen localmente (no sincronizadas aún)
+        val localOnlyTasks = localTasks.filter { localTask ->
+            val notInFirestore = firestoreTasks.none { it.id == localTask.id }
+            val notRecentlyDeleted = !recentlyDeletedTasks.contains(localTask.id)
+            val shouldInclude = notInFirestore && notRecentlyDeleted
+            
+            Log.d(TAG, "  📱 Local ID=${localTask.id}: notInFirestore=$notInFirestore, notRecentlyDeleted=$notRecentlyDeleted, include=$shouldInclude")
+            shouldInclude
         }
         
-        val mergedTasks = (firestoreTasks + localOnlyTasks).sortedWith(
-            compareBy<TaskEntity> { it.isCompleted }.thenByDescending { it.createdAt }
-        )
+        Log.d(TAG, "  📊 Resultados del filtrado:")
+        Log.d(TAG, "    ☁️ Filtered remote: ${filteredRemoteTasks.size}")
+        Log.d(TAG, "    📱 Local only: ${localOnlyTasks.size}")
+        Log.d(TAG, "    🗑️ Still recently deleted: ${recentlyDeletedTasks.size}")
         
-        Log.d(TAG, "Total tareas combinadas: ${mergedTasks.size}")
-        Log.d(TAG, "=== FIN MERGE TASK LISTS ===")
+        // Combinar: tareas remotas filtradas + tareas solo locales
+        val mergedTasks = (filteredRemoteTasks + localOnlyTasks).distinctBy { it.id }
+        
+        Log.d(TAG, "  ✅ Lista final combinada: ${mergedTasks.size} tareas")
+        mergedTasks.forEach { task ->
+            Log.d(TAG, "    ✅ Final: ID=${task.id}, title='${task.title}'")
+        }
         
         return mergedTasks
     }

@@ -10,6 +10,7 @@ import com.example.recordatoriomodelo2.data.local.TaskEntity
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -34,7 +35,7 @@ class SyncManager private constructor(
     private val conflictResolver = ConflictResolver.getInstance()
     
     companion object {
-        private const val TAG = "SyncManager"
+        private const val TAG = "🔍DEBUG_SyncMgr"
         private const val TASKS_COLLECTION = "tasks"
         
         @Volatile
@@ -77,6 +78,10 @@ class SyncManager private constructor(
     private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     
+    // 🎯 Sistema de filtrado inteligente de eliminaciones
+    private val recentDeletions = mutableMapOf<Int, Long>() // taskId -> timestamp
+    private val deletionTimeoutMs = 5000L // 5 segundos
+    
     init {
         setupNetworkMonitoring()
     }
@@ -108,6 +113,39 @@ class SyncManager private constructor(
     }
     
     /**
+     * 🎯 Registra una tarea como eliminada recientemente
+     */
+    fun markTaskAsDeleted(taskId: Int) {
+        synchronized(recentDeletions) {
+            val timestamp = System.currentTimeMillis()
+            recentDeletions[taskId] = timestamp
+            Log.d(TAG, "🗑️ MARCANDO TAREA COMO ELIMINADA:")
+            Log.d(TAG, "  📝 TaskID: $taskId")
+            Log.d(TAG, "  ⏰ Timestamp: $timestamp")
+            Log.d(TAG, "  📊 Total eliminaciones recientes: ${recentDeletions.size}")
+            Log.d(TAG, "  🔍 Lista actual: ${recentDeletions.keys}")
+        }
+    }
+    
+    /**
+     * 🎯 Obtiene las tareas eliminadas recientemente (no expiradas)
+     */
+    private fun getRecentDeletions(currentTime: Long): Set<Int> {
+        synchronized(recentDeletions) {
+            // Limpiar eliminaciones expiradas
+            val iterator = recentDeletions.iterator()
+            while (iterator.hasNext()) {
+                val entry = iterator.next()
+                if (currentTime - entry.value > deletionTimeoutMs) {
+                    iterator.remove()
+                    Log.d(TAG, "🕒 Eliminación de tarea ${entry.key} expirada")
+                }
+            }
+            return recentDeletions.keys.toSet()
+        }
+    }
+    
+    /**
      * Inicia la sincronización en tiempo real para un usuario con detección automática de conflictos
      */
     fun startRealtimeSync(userId: String, localTasksFlow: Flow<List<TaskEntity>>? = null): Flow<List<TaskEntity>> = callbackFlow {
@@ -135,6 +173,21 @@ class SyncManager private constructor(
                     if (snapshot != null) {
                         _syncState.value = SyncState.SYNCING
                         
+                        // 🔍 Log para verificar la fuente de datos
+                        val source = if (snapshot.metadata.isFromCache) "CACHE" else "SERVER"
+                        Log.d(TAG, "🔍 Datos recibidos desde: $source, documentos: ${snapshot.documents.size}")
+                        
+                        // 🎯 SOLUCIÓN INTELIGENTE: Filtrar tareas eliminadas recientemente
+                        // Esto no aumenta las lecturas de Firestore
+                        val currentTime = System.currentTimeMillis()
+                        val recentDeletions = getRecentDeletions(currentTime)
+                        
+                        Log.d(TAG, "🔍 PROCESANDO DATOS DE FIRESTORE:")
+                        Log.d(TAG, "  ⏰ Timestamp actual: $currentTime")
+                        Log.d(TAG, "  📊 Documentos recibidos: ${snapshot.documents.size}")
+                        Log.d(TAG, "  🗑️ Eliminaciones recientes: ${recentDeletions.size}")
+                        Log.d(TAG, "  🔍 IDs eliminados: $recentDeletions")
+                        
                         val remoteTasks = snapshot.documents.mapNotNull { doc ->
                             try {
                                 val taskEntity = doc.toObject(TaskEntity::class.java)
@@ -152,7 +205,24 @@ class SyncManager private constructor(
                                         else -> taskEntity.id
                                     }
                                     
-                                    taskEntity.copy(id = taskId)
+                                    val finalTask = taskEntity.copy(id = taskId)
+                                    
+                                    // 🎯 FILTRO INTELIGENTE: Excluir tareas eliminadas recientemente
+                                    if (recentDeletions.contains(taskId)) {
+                                        val deletionTime = synchronized(this@SyncManager.recentDeletions) {
+                                            this@SyncManager.recentDeletions[taskId] ?: 0L
+                                        }
+                                        Log.w(TAG, "🚫 FILTRO APLICADO:")
+                                        Log.w(TAG, "  📝 TaskID: $taskId")
+                                        Log.w(TAG, "  🏷️ Título: ${taskEntity.title}")
+                                        Log.w(TAG, "  ⏰ Eliminada en: $deletionTime")
+                                        Log.w(TAG, "  🕒 Tiempo transcurrido: ${currentTime - deletionTime}ms")
+                                        Log.w(TAG, "  ✅ Tarea filtrada exitosamente")
+                                        null
+                                    } else {
+                                        Log.d(TAG, "✅ Tarea procesada: ID=$taskId, título='${taskEntity.title}'")
+                                        finalTask
+                                    }
                                 } else {
                                     null
                                 }
