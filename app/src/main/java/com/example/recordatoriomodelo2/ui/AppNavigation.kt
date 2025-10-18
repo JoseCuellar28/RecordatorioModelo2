@@ -118,6 +118,7 @@ sealed class Screen(val route: String) {
     }
     object GoogleClassroomImport : Screen("google_classroom_import")
     object Profile : Screen("profile")
+    object ProfileEdit : Screen("profile_edit")
 }
 
 @Composable
@@ -224,6 +225,9 @@ fun AppNavigation() {
         }
         composable(Screen.Profile.route) {
             ProfileScreen(navController)
+        }
+        composable(Screen.ProfileEdit.route) {
+            com.example.recordatoriomodelo2.ui.screens.profile.ProfileEditScreen(navController)
         }
         composable(Screen.Register.route) {
             com.example.recordatoriomodelo2.ui.screens.auth.RegisterScreen(navController)
@@ -1626,11 +1630,7 @@ fun AddTaskScreen(navController: NavHostController, taskId: Int?) {
 @Composable
 fun ProfileScreen(navController: NavHostController) {
     val context = LocalContext.current
-    var tempName by remember { mutableStateOf(userProfile.fullName) }
-    var tempEmail by remember { mutableStateOf(userProfile.email) }
-    var tempPhone by remember { mutableStateOf(userProfile.phone) }
-    var tempInstitution by remember { mutableStateOf(userProfile.institution) }
-    val inicial = tempName.trim().takeIf { it.isNotEmpty() }?.firstOrNull()?.uppercase() ?: "U"
+    val inicial = userProfile.fullName.trim().takeIf { it.isNotEmpty() }?.firstOrNull()?.uppercase() ?: "U"
     val rojoVibrante = androidx.compose.ui.graphics.Color(0xFFEF4444)
     val azulMarino = androidx.compose.ui.graphics.Color(0xFF1E293B)
     val grisClaro = androidx.compose.ui.graphics.Color(0xFFF3F4F6)
@@ -1661,91 +1661,26 @@ fun ProfileScreen(navController: NavHostController) {
         Spacer(modifier = Modifier.height(16.dp))
         Text("Perfil de usuario", style = MaterialTheme.typography.headlineMedium, color = azulMarino)
         Spacer(modifier = Modifier.height(24.dp))
-        ModernTextField(
-            value = tempName,
-            onValueChange = { tempName = it },
-            label = "Nombre completo"
-        )
+        
+        // Campos de solo lectura
+        ProfileInfoCard(label = "Nombre completo", value = userProfile.fullName)
         Spacer(modifier = Modifier.height(16.dp))
-        ModernTextField(
-            value = tempEmail,
-            onValueChange = { tempEmail = it },
-            label = "Correo electrónico"
-        )
+        ProfileInfoCard(label = "Correo electrónico", value = userProfile.email)
         Spacer(modifier = Modifier.height(16.dp))
-        ModernTextField(
-            value = tempPhone,
-            onValueChange = { tempPhone = it },
-            label = "Número de teléfono"
-        )
+        ProfileInfoCard(label = "Número de teléfono", value = userProfile.phone)
         Spacer(modifier = Modifier.height(16.dp))
-        ModernTextField(
-            value = tempInstitution,
-            onValueChange = { tempInstitution = it },
-            label = "Centro de estudio"
-        )
+        ProfileInfoCard(label = "Centro de estudio", value = userProfile.institution)
+        
         Spacer(modifier = Modifier.height(32.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Button(
-                onClick = {
-                    userProfile = userProfile.copy(
-                        fullName = tempName,
-                        email = tempEmail,
-                        phone = tempPhone,
-                        institution = tempInstitution
-                    )
-                    navController.popBackStack()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = rojoVibrante),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)
-            ) {
-                Text("Guardar", color = androidx.compose.ui.graphics.Color.White)
-            }
-            Button(
-                onClick = { navController.popBackStack() },
-                colors = ButtonDefaults.buttonColors(containerColor = azulMarino),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)
-            ) {
-                Text("Cancelar", color = androidx.compose.ui.graphics.Color.White)
-            }
-        }
         
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Botón para cambiar cuenta de Google
+        // Botón para editar perfil
         Button(
-            onClick = {
-                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                    .requestEmail()
-                    .build()
-                val googleSignInClient = GoogleSignIn.getClient(context, gso)
-                
-                googleSignInClient.signOut().addOnCompleteListener {
-                    // Limpiar el perfil del usuario
-                    userProfile = UserProfile()
-                    
-                    // Mostrar mensaje de confirmación
-                    Toast.makeText(context, "Sesión cerrada. Selecciona una nueva cuenta.", Toast.LENGTH_SHORT).show()
-                    
-                    // Navegar a la pantalla de login de Google
-                    navController.navigate("google_login") {
-                        popUpTo("selector_auth") { inclusive = false }
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = androidx.compose.ui.graphics.Color(0xFF4285F4)
-            ),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)
+            onClick = { navController.navigate(Screen.ProfileEdit.route) },
+            colors = ButtonDefaults.buttonColors(containerColor = rojoVibrante),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                "Cambiar cuenta de Google",
-                color = androidx.compose.ui.graphics.Color.White
-            )
+            Text("Editar Perfil", color = androidx.compose.ui.graphics.Color.White)
         }
     }
 }
@@ -1760,4 +1695,29 @@ fun ModernTextField(value: String, onValueChange: (String) -> Unit, label: Strin
         modifier = Modifier.fillMaxWidth(),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
     )
+}
+
+@Composable
+fun ProfileInfoCard(label: String, value: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFF8F9FA))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = androidx.compose.ui.graphics.Color(0xFF6B7280)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = value.ifEmpty { "No especificado" },
+                style = MaterialTheme.typography.bodyLarge,
+                color = androidx.compose.ui.graphics.Color(0xFF1F2937)
+            )
+        }
+    }
 }
