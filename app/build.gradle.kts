@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.recordatoriomodelo2"
         minSdk = 24
         targetSdk = 36
-        versionCode = 243
-        versionName = "2.4.3"
+        versionCode = 253
+        versionName = "2.5.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
