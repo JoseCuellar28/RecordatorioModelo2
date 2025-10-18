@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -30,9 +31,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.recordatoriomodelo2.firebase.FirebaseManager
 import com.example.recordatoriomodelo2.ui.UserProfile
 import com.example.recordatoriomodelo2.ui.userProfile
+import com.example.recordatoriomodelo2.utils.rememberImagePickerHelper
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,10 +49,10 @@ fun ProfileEditScreen(
     val scrollState = rememberScrollState()
     
     // Estados del formulario
-    var fullName by remember { mutableStateOf(userProfile.fullName) }
-    var email by remember { mutableStateOf(userProfile.email) }
-    var phone by remember { mutableStateOf(userProfile.phone) }
-    var institution by remember { mutableStateOf(userProfile.institution) }
+    var fullName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var institution by remember { mutableStateOf("") }
     
     // Estados de validación
     var fullNameError by remember { mutableStateOf("") }
@@ -60,6 +63,29 @@ fun ProfileEditScreen(
     // Estados de UI
     var isLoading by remember { mutableStateOf(false) }
     var showDiscardDialog by remember { mutableStateOf(false) }
+    
+    // Estado del ViewModel
+    val uiState by viewModel.uiState.collectAsState()
+    
+    // Helper para selección de imagen
+    val imagePickerHelper = rememberImagePickerHelper(
+        onImageSelected = { uri ->
+            uri?.let { 
+                viewModel.updateProfileImage(it, context)
+            }
+        },
+        onError = { error ->
+            Toast.makeText(context, "Error al seleccionar imagen: $error", Toast.LENGTH_SHORT).show()
+        }
+    )
+    
+    // Sincronizar estados del formulario con ViewModel
+    LaunchedEffect(uiState) {
+        fullName = uiState.fullName
+        email = uiState.email
+        phone = uiState.phone
+        institution = uiState.institution
+    }
     
     // Colores del tema
     val rojoVibrante = Color(0xFFEF4444)
@@ -140,8 +166,7 @@ fun ProfileEditScreen(
     
     // Verificar si hay cambios (solo en campos editables)
     fun hasChanges(): Boolean {
-        return phone.trim() != userProfile.phone ||
-                institution.trim() != userProfile.institution
+        return uiState.hasChanges
     }
     
     // Diálogo de confirmación para descartar cambios
@@ -218,18 +243,63 @@ fun ProfileEditScreen(
         Box(
             modifier = Modifier
                 .size(100.dp)
-                .background(
-                    color = rojoVibrante,
-                    shape = CircleShape
-                ),
+                .clip(CircleShape)
+                .clickable { 
+                    imagePickerHelper.showImagePicker()
+                },
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = inicial,
-                style = MaterialTheme.typography.headlineLarge,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
+            if (uiState.profileImageUrl.isNotEmpty()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(uiState.profileImageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Foto de perfil",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                    error = painterResource(id = android.R.drawable.ic_menu_camera),
+                    placeholder = painterResource(id = android.R.drawable.ic_menu_camera)
+                )
+            } else {
+                // Mostrar inicial si no hay imagen
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            color = rojoVibrante,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = inicial,
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            // Overlay de carga si se está subiendo imagen
+            if (uiState.isUploadingImage) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            color = Color.Black.copy(alpha = 0.5f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
         }
         
         Spacer(modifier = Modifier.height(8.dp))
@@ -301,6 +371,7 @@ fun ProfileEditScreen(
                     value = phone,
                     onValueChange = { 
                         phone = it
+                        viewModel.updatePhone(it)
                         if (phoneError.isNotEmpty()) phoneError = ""
                     },
                     label = { Text("Número de teléfono") },
@@ -324,6 +395,7 @@ fun ProfileEditScreen(
                     value = institution,
                     onValueChange = { 
                         institution = it
+                        viewModel.updateInstitution(it)
                         if (institutionError.isNotEmpty()) institutionError = ""
                     },
                     label = { Text("Centro de estudio *") },

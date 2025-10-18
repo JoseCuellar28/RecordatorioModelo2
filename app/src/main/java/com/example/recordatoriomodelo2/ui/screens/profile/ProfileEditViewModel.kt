@@ -18,11 +18,13 @@ data class ProfileEditUiState(
     val email: String = "",
     val phone: String = "",
     val institution: String = "",
+    val profileImageUrl: String = "",
     val fullNameError: String = "",
     val emailError: String = "",
     val phoneError: String = "",
     val institutionError: String = "",
-    val hasChanges: Boolean = false
+    val hasChanges: Boolean = false,
+    val isUploadingImage: Boolean = false
 )
 
 class ProfileEditViewModel : ViewModel() {
@@ -41,7 +43,8 @@ class ProfileEditViewModel : ViewModel() {
             fullName = userProfile.fullName,
             email = userProfile.email,
             phone = userProfile.phone,
-            institution = userProfile.institution
+            institution = userProfile.institution,
+            profileImageUrl = userProfile.profileImageUrl
         )
         originalProfile = userProfile
     }
@@ -266,6 +269,7 @@ class ProfileEditViewModel : ViewModel() {
                                 email = updatedProfile.email,
                                 phone = updatedProfile.phone,
                                 institution = updatedProfile.institution,
+                                profileImageUrl = updatedProfile.profileImageUrl,
                                 hasChanges = false
                             )
                         }
@@ -274,6 +278,42 @@ class ProfileEditViewModel : ViewModel() {
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "Error al cargar perfil: ${e.message}"
+                )
+            }
+        }
+    }
+    
+    fun updateProfileImage(imageUri: android.net.Uri, context: android.content.Context) {
+        _uiState.value = _uiState.value.copy(isUploadingImage = true, errorMessage = null)
+        
+        viewModelScope.launch {
+            try {
+                val result = FirebaseManager.uploadAndSetProfileImage(imageUri, context)
+                
+                if (result.isSuccess) {
+                    val imageUrl = result.getOrNull()!!
+                    
+                    // Actualizar estado local
+                    _uiState.value = _uiState.value.copy(
+                        profileImageUrl = imageUrl,
+                        isUploadingImage = false,
+                        hasChanges = true
+                    )
+                    
+                    // Actualizar perfil global
+                    userProfile = userProfile.copy(profileImageUrl = imageUrl)
+                    
+                } else {
+                    val errorMsg = result.exceptionOrNull()?.message ?: "Error al subir imagen"
+                    _uiState.value = _uiState.value.copy(
+                        isUploadingImage = false,
+                        errorMessage = errorMsg
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isUploadingImage = false,
+                    errorMessage = "Error inesperado: ${e.message}"
                 )
             }
         }

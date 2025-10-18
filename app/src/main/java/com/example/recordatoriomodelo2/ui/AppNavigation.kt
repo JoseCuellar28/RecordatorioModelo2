@@ -48,6 +48,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextAlign
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.rememberDatePickerState
@@ -85,11 +89,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.collectAsState
-import coil.compose.AsyncImage
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import com.example.recordatoriomodelo2.firebase.FirebaseManager
 import com.example.recordatoriomodelo2.ui.components.OfflineStatusBar
 import kotlinx.coroutines.launch
@@ -1642,21 +1643,43 @@ fun ProfileScreen(navController: NavHostController) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(32.dp))
-        // Círculo con inicial rojo
+        // Avatar del usuario
         Box(
             modifier = Modifier
                 .size(80.dp)
-                .background(
-                    color = rojoVibrante,
-                    shape = androidx.compose.foundation.shape.CircleShape
-                ),
+                .clip(CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = inicial.toString(),
-                style = MaterialTheme.typography.headlineLarge,
-                color = androidx.compose.ui.graphics.Color.White
-            )
+            if (userProfile.profileImageUrl.isNotEmpty()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(userProfile.profileImageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Foto de perfil",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                // Mostrar inicial si no hay imagen
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            color = rojoVibrante,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = inicial.toString(),
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = androidx.compose.ui.graphics.Color.White
+                    )
+                }
+            }
         }
         Spacer(modifier = Modifier.height(16.dp))
         Text("Perfil de usuario", style = MaterialTheme.typography.headlineMedium, color = azulMarino)
