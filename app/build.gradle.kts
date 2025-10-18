@@ -84,6 +84,10 @@ dependencies {
     testImplementation("com.google.truth:truth:1.1.4")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("org.slf4j:slf4j-simple:2.0.9")
+    testImplementation("androidx.compose.ui:ui-test-junit4:1.5.4")
+    testImplementation("org.robolectric:robolectric:4.11.1")
+    testImplementation("androidx.test:core:1.5.0")
+    testImplementation("androidx.test.ext:junit:1.1.5")
     
     // Pruebas instrumentadas
     androidTestImplementation(libs.androidx.junit)
@@ -91,6 +95,8 @@ dependencies {
     androidTestImplementation("io.mockk:mockk-android:1.13.8")
     androidTestImplementation("androidx.room:room-testing:2.6.1")
     androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.5.4")
+    androidTestImplementation("androidx.navigation:navigation-testing:2.7.5")
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation(platform("com.google.firebase:firebase-bom:33.16.0"))
