@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExitToApp
+import com.example.recordatoriomodelo2.firebase.FirebaseManager
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
@@ -48,6 +49,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextAlign
+import java.util.Date
+import java.text.SimpleDateFormat
+import java.util.Locale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ArrowBack
+import com.example.recordatoriomodelo2.data.local.AppDatabase
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.draw.clip
@@ -91,7 +99,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.example.recordatoriomodelo2.firebase.FirebaseManager
 import com.example.recordatoriomodelo2.ui.components.OfflineStatusBar
 import kotlinx.coroutines.launch
 
@@ -116,6 +123,9 @@ sealed class Screen(val route: String) {
     object Tasks : Screen("tasks")
     object AddTask : Screen("add_task?taskId={taskId}") {
         fun createRoute(taskId: Int?) = "add_task?taskId=${taskId ?: -1}"
+    }
+    object TaskDetail : Screen("task_detail/{taskId}") {
+        fun createRoute(taskId: Int) = "task_detail/$taskId"
     }
     object GoogleClassroomImport : Screen("google_classroom_import")
     object Profile : Screen("profile")
@@ -221,6 +231,13 @@ fun AppNavigation() {
             val taskId = backStackEntry.arguments?.getInt("taskId")?.takeIf { it != -1 }
             AddTaskScreen(navController, taskId)
         }
+        composable(
+            route = Screen.TaskDetail.route,
+            arguments = listOf(navArgument("taskId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val taskId = backStackEntry.arguments?.getInt("taskId") ?: 0
+            TaskDetailScreen(navController, taskId)
+        }
         composable(Screen.GoogleClassroomImport.route) {
             GoogleClassroomImportScreen(navController)
         }
@@ -236,6 +253,190 @@ fun AppNavigation() {
         composable(Screen.FirstLogin.route) {
             com.example.recordatoriomodelo2.ui.screens.auth.FirstLoginScreen(navController)
         }
+        }
+    }
+}
+
+@Composable
+fun TaskDetailScreen(navController: NavHostController, taskId: Int) {
+    val viewModel: TasksViewModel = viewModel()
+    val tasks by viewModel.tasks.collectAsState(initial = emptyList())
+    val rojoVibrante = androidx.compose.ui.graphics.Color(0xFFEF4444)
+    
+    // Buscar la tarea en la lista de tareas
+    val task = tasks.find { it.id == taskId }
+    val isLoading = tasks.isEmpty()
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(androidx.compose.ui.graphics.Color(0xFFF8F9FA))
+    ) {
+        // Header con botón de regreso
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(rojoVibrante)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = { navController.popBackStack() }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Volver",
+                    tint = androidx.compose.ui.graphics.Color.White
+                )
+            }
+            
+            Text(
+                text = "Detalle de Tarea",
+                style = MaterialTheme.typography.headlineSmall,
+                color = androidx.compose.ui.graphics.Color.White,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        
+        if (isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = rojoVibrante)
+            }
+        } else if (task != null) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    // Título de la tarea
+                    DetailCard(
+                        title = "Título",
+                        content = task!!.title
+                    )
+                }
+                
+                item {
+                    // Materia
+                    DetailCard(
+                        title = "Materia",
+                        content = task!!.subject
+                    )
+                }
+                
+                item {
+                    // Descripción
+                    DetailCard(
+                        title = "Descripción",
+                        content = task!!.description.ifEmpty { "Sin descripción" }
+                    )
+                }
+                
+                item {
+                    // Fecha de vencimiento
+                    DetailCard(
+                        title = "Fecha de vencimiento",
+                        content = if (task!!.dueDate.isNotEmpty()) {
+                            task!!.dueDate
+                        } else {
+                            "Sin fecha de vencimiento"
+                        }
+                    )
+                }
+                
+                item {
+                    // Estado
+                    DetailCard(
+                        title = "Estado",
+                        content = if (task!!.isCompleted) "Completada" else "Pendiente"
+                    )
+                }
+                
+                item {
+                    // Fecha de creación
+                    DetailCard(
+                        title = "Fecha de creación",
+                        content = task!!.createdAt
+                    )
+                }
+                
+                item {
+                    // Recordatorio
+                    DetailCard(
+                        title = "Recordatorio",
+                        content = if (!task!!.reminderAt.isNullOrEmpty()) {
+                            task!!.reminderAt!!
+                        } else {
+                            "Sin recordatorio"
+                        }
+                    )
+                }
+                
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Botón para editar
+                    Button(
+                        onClick = { 
+                            navController.navigate(Screen.AddTask.createRoute(taskId))
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = rojoVibrante),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Editar Tarea", color = androidx.compose.ui.graphics.Color.White)
+                    }
+                }
+            }
+        } else {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Tarea no encontrada",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = androidx.compose.ui.graphics.Color.Gray
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DetailCard(title: String, content: String) {
+    val rojoVibrante = androidx.compose.ui.graphics.Color(0xFFEF4444)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                color = rojoVibrante,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = content,
+                style = MaterialTheme.typography.bodyLarge,
+                color = androidx.compose.ui.graphics.Color(0xFF1F2937)
+            )
         }
     }
 }
@@ -309,14 +510,17 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel) {
     
     // Cargar perfil del usuario incluyendo imagen
     LaunchedEffect(Unit) {
+        Log.d("HomeScreen", "Iniciando carga de perfil de usuario")
         val currentUser = FirebaseManager.getCurrentUser()
         
         if (currentUser != null) {
+            Log.d("HomeScreen", "Usuario autenticado encontrado: ${currentUser.uid}")
             // Cargar datos del perfil
             val profileResult = FirebaseManager.getUserProfile(currentUser.uid)
             if (profileResult.isSuccess) {
                 val profileData: Map<String, Any>? = profileResult.getOrNull()
                 if (profileData != null) {
+                    Log.d("HomeScreen", "Datos de perfil cargados: $profileData")
                     userProfile = userProfile.copy(
                         fullName = profileData["fullName"] as? String ?: "",
                         email = profileData["email"] as? String ?: "",
@@ -324,8 +528,15 @@ fun HomeScreen(navController: NavHostController, authViewModel: AuthViewModel) {
                         institution = profileData["institution"] as? String ?: "",
                         profileImageUrl = profileData["profileImageUrl"] as? String ?: ""
                     )
+                    Log.d("HomeScreen", "Perfil actualizado - Nombre: ${userProfile.fullName}, Imagen: ${userProfile.profileImageUrl}")
+                } else {
+                    Log.w("HomeScreen", "Los datos del perfil son nulos")
                 }
+            } else {
+                Log.e("HomeScreen", "Error al cargar perfil: ${profileResult.exceptionOrNull()}")
             }
+        } else {
+            Log.w("HomeScreen", "No hay usuario autenticado")
         }
     }
 
@@ -1102,12 +1313,22 @@ fun TasksScreen(navController: NavHostController) {
     val uiState by viewModel.uiState.collectAsState()
     var showConflictDialog by remember { mutableStateOf(false) }
     
+    // Obtener información del usuario actual para sincronización
+    val currentUser = FirebaseManager.getCurrentUser()
+    
+    // Iniciar sincronización automática cuando se carga la pantalla
+    LaunchedEffect(currentUser?.uid) {
+        if (currentUser != null) {
+            viewModel.forceSyncTasks()
+        }
+    }
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header con título y botones
+        // Header simplificado con solo el título y botones
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1115,11 +1336,13 @@ fun TasksScreen(navController: NavHostController) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Título simple
             Text(
                 text = "Mis Tareas",
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-                color = androidx.compose.ui.graphics.Color(0xFFEF4444) // Rojo vibrante
+                color = androidx.compose.ui.graphics.Color(0xFF1E293B)
             )
+            
             Row {
                 // Botón para limpiar fechas (solo si hay tareas)
                 if (tasks.isNotEmpty()) {
@@ -1142,7 +1365,7 @@ fun TasksScreen(navController: NavHostController) {
                     }
                 ) {
                     Icon(
-                        Icons.Filled.AccountCircle,
+                        Icons.Filled.ExitToApp,
                         contentDescription = "Cerrar sesión",
                         tint = androidx.compose.ui.graphics.Color(0xFF1E293B) // Azul marino
                     )
@@ -1195,7 +1418,7 @@ fun TasksScreen(navController: NavHostController) {
                 items(tasks) { task ->
                     TaskCard(
                         task = task,
-                        onTaskClick = { navController.navigate(Screen.AddTask.createRoute(task.id)) },
+                        onTaskClick = { navController.navigate(Screen.TaskDetail.createRoute(task.id)) },
                         onCheckboxClick = { viewModel.toggleCompleted(task) },
                         onDeleteClick = { viewModel.deleteTask(task) }
                     )
@@ -1438,6 +1661,8 @@ fun AddTaskScreen(navController: NavHostController, taskId: Int?) {
     val editingTask = tasks.find { it.id == taskId }
     var title by remember { mutableStateOf(editingTask?.title ?: "") }
     var subject by remember { mutableStateOf(editingTask?.subject ?: "") }
+    var description by remember { mutableStateOf(editingTask?.description ?: "") }
+    var dueDate by remember { mutableStateOf(editingTask?.dueDate ?: "") }
     var error by remember { mutableStateOf("") }
     var reminderAt by remember { mutableStateOf(editingTask?.reminderAt ?: "") }
     val scope = rememberCoroutineScope()
@@ -1445,6 +1670,9 @@ fun AddTaskScreen(navController: NavHostController, taskId: Int?) {
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var tempDate by remember { mutableStateOf("") }
+    var showDueDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState()
+    val dueDatePickerState = rememberDatePickerState()
     val context = LocalContext.current
     var timePickerDialog: TimePickerDialog? by remember { mutableStateOf(null) }
     Box(
@@ -1480,9 +1708,40 @@ fun AddTaskScreen(navController: NavHostController, taskId: Int?) {
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 24.dp),
+                    .padding(bottom = 16.dp),
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
             )
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Descripción (opcional)", color = androidx.compose.ui.graphics.Color(0xFF1E293B)) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+                    .height(120.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                maxLines = 4
+            )
+            
+            // Campo de fecha de vencimiento
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Button(
+                    onClick = { showDueDatePicker = true },
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFF1E293B), // Azul marino
+                        contentColor = androidx.compose.ui.graphics.Color.White
+                    ),
+                    modifier = Modifier.fillMaxWidth(0.7f)
+                ) {
+                    Text(if (dueDate.isEmpty()) "Fecha de vencimiento" else "Vence: $dueDate")
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center
@@ -1527,9 +1786,9 @@ fun AddTaskScreen(navController: NavHostController, taskId: Int?) {
                         } else {
                             scope.launch {
                                 if (isEditing) {
-                                    viewModel.updateTask(editingTask!!.copy(title = title, subject = subject, reminderAt = reminderAt))
+                                    viewModel.updateTask(editingTask!!.copy(title = title, subject = subject, description = description, dueDate = dueDate, reminderAt = reminderAt))
                                 } else {
-                                    viewModel.insertTask(title, subject, reminderAt)
+                                    viewModel.insertTask(title, subject, description, dueDate, reminderAt)
                                 }
                                 navController.popBackStack()
                             }
@@ -1623,6 +1882,47 @@ fun AddTaskScreen(navController: NavHostController, taskId: Int?) {
                 )
                 timePickerDialog?.setOnDismissListener { showTimePicker = false }
                 timePickerDialog?.show()
+            }
+        }
+        
+        // DatePicker para fecha de vencimiento
+        if (showDueDatePicker) {
+            DatePickerDialog(
+                onDismissRequest = { showDueDatePicker = false },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            dueDatePickerState.selectedDateMillis?.let { millis ->
+                                val calendar = Calendar.getInstance()
+                                calendar.timeInMillis = millis
+                                dueDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(calendar.time)
+                            }
+                            showDueDatePicker = false
+                        }
+                    ) {
+                        Text("Confirmar")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDueDatePicker = false }) {
+                        Text("Cancelar")
+                    }
+                }
+            ) {
+                DatePicker(
+                    state = dueDatePickerState,
+                    colors = DatePickerDefaults.colors(
+                        containerColor = androidx.compose.ui.graphics.Color.White,
+                        titleContentColor = androidx.compose.ui.graphics.Color(0xFF1E293B),
+                        headlineContentColor = androidx.compose.ui.graphics.Color(0xFF1E293B),
+                        weekdayContentColor = androidx.compose.ui.graphics.Color(0xFF64748B),
+                        subheadContentColor = androidx.compose.ui.graphics.Color(0xFF1E293B),
+                        selectedDayContainerColor = androidx.compose.ui.graphics.Color(0xFFEF4444),
+                        selectedDayContentColor = androidx.compose.ui.graphics.Color.White,
+                        dayContentColor = androidx.compose.ui.graphics.Color(0xFF1E293B),
+                        todayContentColor = androidx.compose.ui.graphics.Color(0xFFEF4444)
+                    )
+                )
             }
         }
     }

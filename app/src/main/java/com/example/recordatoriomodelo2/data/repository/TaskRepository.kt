@@ -14,6 +14,7 @@ import com.example.recordatoriomodelo2.services.SessionManager
 import com.example.recordatoriomodelo2.middleware.SecurityMiddleware
 import com.example.recordatoriomodelo2.middleware.SecurityResult
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
@@ -73,11 +74,11 @@ class TaskRepository(
                 
                 // Log detalles de las tareas
                 localTasks.forEach { task ->
-                    Log.d(TAG, "  📱 Local: ID=${task.id}, title='${task.title}', deleted=${recentlyDeletedTasks.contains(task.id)}")
+                    Log.d(TAG, "  📱 Local: ID=${task.id}, title='${task.title}', desc='${task.description}', dueDate=${task.dueDate}, reminderAt=${task.reminderAt}, deleted=${recentlyDeletedTasks.contains(task.id)}")
                 }
                 firestoreTasks.forEach { task ->
                     val isDeleted = recentlyDeletedTasks.contains(task.id)
-                    Log.d(TAG, "  ☁️ Firestore: ID=${task.id}, title='${task.title}', deleted=$isDeleted")
+                    Log.d(TAG, "  ☁️ Firestore: ID=${task.id}, title='${task.title}', desc='${task.description}', dueDate=${task.dueDate}, reminderAt=${task.reminderAt}, deleted=$isDeleted")
                     
                     // ⚠️ ALERTA ESPECIAL: Tarea eliminada que aparece en Firestore
                     if (isDeleted) {
@@ -199,30 +200,8 @@ class TaskRepository(
                     
                     if (snapshot != null) {
                         val tasks = snapshot.documents.mapNotNull { doc ->
-                            try {
-                                val taskEntity = doc.toObject(TaskEntity::class.java)
-                                if (taskEntity != null) {
-                                    // Intentar obtener el ID de diferentes formas
-                                    val taskId = when {
-                                        doc.contains("id") && doc.get("id") != null -> {
-                                            when (val idValue = doc.get("id")) {
-                                                is Long -> idValue.toInt()
-                                                is Int -> idValue
-                                                is String -> idValue.toIntOrNull() ?: taskEntity.id
-                                                else -> taskEntity.id
-                                            }
-                                        }
-                                        else -> taskEntity.id
-                                    }
-                                    
-                                    taskEntity.copy(id = taskId)
-                                } else {
-                                    null
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error convirtiendo documento a TaskEntity: ${e.message}", e)
-                                null
-                            }
+                            // Usar conversión manual para manejar correctamente todos los campos
+                            documentToTaskEntity(doc)
                         }
                         Log.d(TAG, "Tareas recibidas de Firestore: ${tasks.size}")
                         trySend(tasks)
@@ -515,10 +494,11 @@ class TaskRepository(
      * Convierte TaskEntity a Map para Firestore
      */
     private fun taskToFirestoreMap(task: TaskEntity): Map<String, Any?> {
-        return mapOf(
+        val map = mapOf(
             "id" to task.id,
             "title" to task.title,
             "subject" to task.subject,
+            "description" to task.description, // Campo agregado para incluir la descripción
             "dueDate" to task.dueDate,
             "isCompleted" to task.isCompleted,
             "createdAt" to task.createdAt,
@@ -527,6 +507,46 @@ class TaskRepository(
             "userId" to task.userId,
             "lastModified" to SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         )
+        
+        // Log detallado de los datos que se envían a Firestore
+        Log.d(TAG, "🔥 FIRESTORE MAP DETAILS:")
+        Log.d(TAG, "  📝 title: '${task.title}'")
+        Log.d(TAG, "  📄 description: '${task.description}'")
+        Log.d(TAG, "  📅 dueDate: '${task.dueDate}'")
+        Log.d(TAG, "  ⏰ reminderAt: '${task.reminderAt}'")
+        Log.d(TAG, "  👤 userId: '${task.userId}'")
+        Log.d(TAG, "  🆔 id: ${task.id}")
+        
+        return map
+    }
+    
+    /**
+     * Convierte un documento de Firestore a TaskEntity de forma manual
+     * Esto asegura que todos los campos se manejen correctamente, incluyendo dueDate
+     */
+    private fun documentToTaskEntity(doc: DocumentSnapshot): TaskEntity? {
+        return try {
+            TaskEntity(
+                id = when (val idValue = doc.get("id")) {
+                    is Long -> idValue.toInt()
+                    is Int -> idValue
+                    is String -> idValue.toIntOrNull() ?: 0
+                    else -> 0
+                },
+                title = doc.getString("title") ?: "",
+                subject = doc.getString("subject") ?: "",
+                description = doc.getString("description") ?: "", // Manejo explícito del description
+                dueDate = doc.getString("dueDate") ?: "", // Manejo explícito del dueDate
+                isCompleted = doc.getBoolean("isCompleted") ?: false,
+                createdAt = doc.getString("createdAt") ?: "",
+                reminderAt = doc.getString("reminderAt"),
+                classroomId = doc.getString("classroomId"),
+                userId = doc.getString("userId")
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error convirtiendo documento a TaskEntity: ${e.message}", e)
+            null
+        }
     }
     
     /**

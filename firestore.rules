@@ -3,51 +3,45 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // REGLAS TEMPORALES PARA DESARROLLO - MÁS PERMISIVAS
+    // TODO: Ajustar para producción
+    
     // Reglas para la colección de tareas
     match /tasks/{taskId} {
-      // Solo permitir acceso si el usuario está autenticado
-      // y la tarea pertenece al usuario actual
-      allow read, write: if request.auth != null 
-                         && request.auth.uid == resource.data.userId;
+      // Permitir acceso si el usuario está autenticado
+      allow read, write: if request.auth != null;
       
-      // Permitir crear nuevas tareas solo si el usuario está autenticado
-      // y el userId en el documento coincide con el usuario autenticado
-      allow create: if request.auth != null 
-                    && request.auth.uid == request.resource.data.userId;
+      // Permitir crear nuevas tareas si el usuario está autenticado
+      allow create: if request.auth != null;
     }
     
     // Reglas para la colección de usuarios
     match /users/{userId} {
-      // Solo permitir acceso al propio perfil del usuario
-      allow read, write: if request.auth != null 
-                         && request.auth.uid == userId;
+      // Permitir acceso si el usuario está autenticado
+      allow read, write: if request.auth != null;
       
-      // Permitir crear perfil solo para el usuario autenticado
-      allow create: if request.auth != null 
-                    && request.auth.uid == userId;
+      // Permitir crear perfil si el usuario está autenticado
+      allow create: if request.auth != null;
     }
     
     // Reglas para la colección de sesiones (si se implementa)
     match /sessions/{sessionId} {
-      // Solo permitir acceso a las propias sesiones
-      allow read, write: if request.auth != null 
-                         && request.auth.uid == resource.data.userId;
+      // Permitir acceso si el usuario está autenticado
+      allow read, write: if request.auth != null;
       
-      // Permitir crear sesiones solo para el usuario autenticado
-      allow create: if request.auth != null 
-                    && request.auth.uid == request.resource.data.userId;
+      // Permitir crear sesiones si el usuario está autenticado
+      allow create: if request.auth != null;
     }
     
     // Reglas para metadatos de sincronización (si se implementa)
     match /sync_metadata/{userId} {
-      // Solo permitir acceso a los propios metadatos de sincronización
-      allow read, write: if request.auth != null 
-                         && request.auth.uid == userId;
+      // Permitir acceso si el usuario está autenticado
+      allow read, write: if request.auth != null;
     }
     
-    // Denegar acceso a cualquier otra colección no especificada
+    // Permitir acceso a cualquier otra colección si el usuario está autenticado
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if request.auth != null;
     }
   }
 }

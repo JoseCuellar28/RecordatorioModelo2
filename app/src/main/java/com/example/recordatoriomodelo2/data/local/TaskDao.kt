@@ -25,4 +25,7 @@ interface TaskDao {
 
     @Query("SELECT * FROM tasks WHERE classroomId = :classroomId AND userId = :userId LIMIT 1")
     suspend fun getTaskByClassroomIdAndUser(classroomId: String, userId: String): TaskEntity?
+
+    @Query("SELECT * FROM tasks WHERE id = :taskId LIMIT 1")
+    suspend fun getTaskById(taskId: Int): TaskEntity?
 }
