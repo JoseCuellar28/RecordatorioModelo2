@@ -1659,14 +1659,25 @@ fun AddTaskScreen(navController: NavHostController, taskId: Int?) {
     val viewModel: TasksViewModel = viewModel()
     val tasks by viewModel.tasks.collectAsState(initial = emptyList())
     val editingTask = tasks.find { it.id == taskId }
-    var title by remember { mutableStateOf(editingTask?.title ?: "") }
-    var subject by remember { mutableStateOf(editingTask?.subject ?: "") }
-    var description by remember { mutableStateOf(editingTask?.description ?: "") }
-    var dueDate by remember { mutableStateOf(editingTask?.dueDate ?: "") }
+    var title by remember { mutableStateOf("") }
+    var subject by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var dueDate by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
-    var reminderAt by remember { mutableStateOf(editingTask?.reminderAt ?: "") }
+    var reminderAt by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val isEditing = editingTask != null
+    
+    // Actualizar los campos cuando editingTask esté disponible
+    LaunchedEffect(editingTask) {
+        editingTask?.let { task ->
+            title = task.title
+            subject = task.subject
+            description = task.description
+            dueDate = task.dueDate
+            reminderAt = task.reminderAt ?: ""
+        }
+    }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var tempDate by remember { mutableStateOf("") }
