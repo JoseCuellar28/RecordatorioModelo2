@@ -14,6 +14,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import my.nanihadesuka.compose.LazyColumnScrollbar
+import my.nanihadesuka.compose.ScrollbarSettings
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.recordatoriomodelo2.ui.TasksViewModel
 import com.example.recordatoriomodelo2.ui.components.ConflictDialog
@@ -1407,21 +1410,34 @@ fun TasksScreen(navController: NavHostController) {
                 }
             }
         } else {
-            // Lista de tareas
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(vertical = 8.dp)
+            // Lista de tareas con scrollbar visible
+            val listState = rememberLazyListState()
+            
+            LazyColumnScrollbar(
+                state = listState,
+                settings = ScrollbarSettings.Default.copy(
+                    thumbUnselectedColor = androidx.compose.ui.graphics.Color(0xFF1E293B).copy(alpha = 0.4f),
+                    thumbSelectedColor = androidx.compose.ui.graphics.Color(0xFF1E293B),
+                    thumbThickness = 8.dp,
+                    alwaysShowScrollbar = false
+                )
             ) {
-                items(tasks) { task ->
-                    TaskCard(
-                        task = task,
-                        onTaskClick = { navController.navigate(Screen.TaskDetail.createRoute(task.id)) },
-                        onCheckboxClick = { viewModel.toggleCompleted(task) },
-                        onDeleteClick = { viewModel.deleteTask(task) }
-                    )
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp)
+                ) {
+                    items(tasks) { task ->
+                        TaskCard(
+                            task = task,
+                            onTaskClick = { navController.navigate(Screen.TaskDetail.createRoute(task.id)) },
+                            onCheckboxClick = { viewModel.toggleCompleted(task) },
+                            onDeleteClick = { viewModel.deleteTask(task) }
+                        )
+                    }
                 }
             }
         }

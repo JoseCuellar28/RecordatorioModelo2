@@ -125,4 +125,7 @@ dependencies {
     
     // JSON parsing
     implementation("com.google.code.gson:gson:2.10.1")
+    
+    // Scrollbar para LazyColumn
+    implementation("com.github.nanihadesuka:LazyColumnScrollbar:2.2.0")
 }
