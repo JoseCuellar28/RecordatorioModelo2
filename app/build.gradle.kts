@@ -36,6 +36,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "/META-INF/NOTICE.md"
             excludes += "/META-INF/LICENSE.md"
+            excludes += "/META-INF/LICENSE-notice.md"
         }
     }
     compileOptions {
@@ -125,4 +126,7 @@ dependencies {
     
     // JSON parsing
     implementation("com.google.code.gson:gson:2.10.1")
+    
+    // Scrollbar para LazyColumn
+    implementation("com.github.nanihadesuka:LazyColumnScrollbar:2.2.0")
 }

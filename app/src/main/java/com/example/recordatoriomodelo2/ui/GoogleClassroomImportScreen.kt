@@ -7,11 +7,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import my.nanihadesuka.compose.LazyColumnScrollbar
+import my.nanihadesuka.compose.ScrollbarSettings
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -512,49 +518,63 @@ fun GoogleClassroomImportScreen(navController: NavHostController) {
                     )
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp)
+                // Lista de cursos con scrollbar visible
+                val coursesListState = rememberLazyListState()
+                
+                LazyColumnScrollbar(
+                    state = coursesListState,
+                    settings = ScrollbarSettings.Default.copy(
+                        thumbUnselectedColor = androidx.compose.ui.graphics.Color(0xFF0EA5E9).copy(alpha = 0.4f),
+                        thumbSelectedColor = androidx.compose.ui.graphics.Color(0xFF0EA5E9),
+                        thumbThickness = 8.dp,
+                        alwaysShowScrollbar = false
+                    )
                 ) {
-                    items(courses) { course ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selectedCourse = course
-                                    loadCourseTasks(course.id, course.name)
-                                },
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface
-                            ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp)
+                    LazyColumn(
+                        state = coursesListState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        items(courses) { course ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedCourse = course
+                                        loadCourseTasks(course.id, course.name)
+                                    },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                ),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                             ) {
-                                Text(
-                                    text = course.name,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                if (!course.section.isNullOrBlank()) {
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                Column(
+                                    modifier = Modifier.padding(16.dp)
+                                ) {
                                     Text(
-                                        text = "Sección: ${course.section}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        text = course.name,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
-                                }
-                                if (!course.room.isNullOrBlank()) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Aula: ${course.room}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                    )
+                                    if (!course.section.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Sección: ${course.section}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                    if (!course.room.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Aula: ${course.room}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -562,151 +582,187 @@ fun GoogleClassroomImportScreen(navController: NavHostController) {
                 }
             }
         } else {
-            // Mostrar lista de tareas del curso seleccionado
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Información del curso seleccionado
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = androidx.compose.ui.graphics.Color(0xFFF3F4F6)
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = selectedCourse?.name ?: "",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = androidx.compose.ui.graphics.Color(0xFF1E293B)
-                        )
-                        Text(
-                            text = "${courseTasks.size} tareas disponibles",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = androidx.compose.ui.graphics.Color(0xFF6B7280)
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // Lista de tareas con checkboxes
-                if (courseTasks.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No se encontraron tareas en este curso",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(courseTasks) { task ->
+            // Mostrar lista de tareas del curso seleccionado usando Scaffold
+            Scaffold(
+                bottomBar = {
+                    // Botón de importar fijo en la parte inferior
+                    if (selectedTasks.isNotEmpty()) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shadowElevation = 8.dp,
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
                             Card(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (selectedTasks.contains(task.id)) {
-                                        androidx.compose.ui.graphics.Color(0xFFE0F2FE)
-                                    } else {
-                                        MaterialTheme.colorScheme.surface
-                                    }
+                                    containerColor = androidx.compose.ui.graphics.Color(0xFF10B981)
                                 ),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                             ) {
-                                Row(
+                                Button(
+                                    onClick = { importSelectedTasks() },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable {
-                                            selectedTasks = if (selectedTasks.contains(task.id)) {
-                                                selectedTasks - task.id
-                                            } else {
-                                                selectedTasks + task.id
-                                            }
-                                        }
                                         .padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Checkbox(
-                                        checked = selectedTasks.contains(task.id),
-                                        onCheckedChange = { checked ->
-                                            selectedTasks = if (checked) {
-                                                selectedTasks + task.id
-                                            } else {
-                                                selectedTasks - task.id
-                                            }
-                                        },
-                                        colors = CheckboxDefaults.colors(
-                                            checkedColor = androidx.compose.ui.graphics.Color(0xFF0EA5E9)
-                                        )
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = androidx.compose.ui.graphics.Color.Transparent
                                     )
-                                    
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    
-                                    Column(
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            text = task.title,
-                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        if (!task.description.isNullOrBlank()) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = task.description!!,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                                maxLines = 2
-                                            )
-                                        }
-                                        if (!task.dueDate.isNullOrBlank()) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = "Fecha límite: ${task.dueDate}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = androidx.compose.ui.graphics.Color(0xFFEF4444)
-                                            )
-                                        }
-                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = null,
+                                        tint = androidx.compose.ui.graphics.Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Importar ${selectedTasks.size} tarea${if (selectedTasks.size > 1) "s" else ""}",
+                                        color = androidx.compose.ui.graphics.Color.White,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                    )
                                 }
                             }
                         }
                     }
+                }
+            ) { paddingValues ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                ) {
+                    // Información del curso seleccionado
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = androidx.compose.ui.graphics.Color(0xFFF3F4F6)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                text = selectedCourse?.name ?: "",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = androidx.compose.ui.graphics.Color(0xFF1E293B)
+                            )
+                            Text(
+                                text = "${courseTasks.size} tareas disponibles",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = androidx.compose.ui.graphics.Color(0xFF6B7280)
+                            )
+                        }
+                    }
                     
-                    // Botón de importar
-                    if (selectedTasks.isNotEmpty()) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = androidx.compose.ui.graphics.Color(0xFF10B981)
+                    // Lista de tareas con checkboxes
+                    if (courseTasks.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No se encontraron tareas en este curso",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    } else {
+                        // Lista de tareas con scrollbar visible
+                        val tasksListState = rememberLazyListState()
+                        
+                        LazyColumnScrollbar(
+                            state = tasksListState,
+                            settings = ScrollbarSettings.Default.copy(
+                                thumbUnselectedColor = androidx.compose.ui.graphics.Color(0xFF0EA5E9).copy(alpha = 0.4f),
+                                thumbSelectedColor = androidx.compose.ui.graphics.Color(0xFF0EA5E9),
+                                thumbThickness = 8.dp,
+                                alwaysShowScrollbar = false
                             )
                         ) {
-                            Button(
-                                onClick = { importSelectedTasks() },
+                            LazyColumn(
+                                state = tasksListState,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = androidx.compose.ui.graphics.Color.Transparent
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(
+                                    top = 8.dp,
+                                    bottom = if (selectedTasks.isNotEmpty()) 16.dp else 8.dp
                                 )
                             ) {
-                                Text(
-                                    text = "Importar ${selectedTasks.size} tarea${if (selectedTasks.size > 1) "s" else ""}",
-                                    color = androidx.compose.ui.graphics.Color.White,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                )
+                                items(courseTasks) { task ->
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (selectedTasks.contains(task.id)) {
+                                                androidx.compose.ui.graphics.Color(0xFFE0F2FE)
+                                            } else {
+                                                MaterialTheme.colorScheme.surface
+                                            }
+                                        ),
+                                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    selectedTasks = if (selectedTasks.contains(task.id)) {
+                                                        selectedTasks - task.id
+                                                    } else {
+                                                        selectedTasks + task.id
+                                                    }
+                                                }
+                                                .padding(16.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Checkbox(
+                                                checked = selectedTasks.contains(task.id),
+                                                onCheckedChange = { checked ->
+                                                    selectedTasks = if (checked) {
+                                                        selectedTasks + task.id
+                                                    } else {
+                                                        selectedTasks - task.id
+                                                    }
+                                                },
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = androidx.compose.ui.graphics.Color(0xFF0EA5E9)
+                                                )
+                                            )
+                                            
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            
+                                            Column(
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(
+                                                    text = task.title,
+                                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                if (!task.description.isNullOrBlank()) {
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = task.description!!,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                        maxLines = 2
+                                                    )
+                                                }
+                                                if (!task.dueDate.isNullOrBlank()) {
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = "Fecha límite: ${task.dueDate}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = androidx.compose.ui.graphics.Color(0xFFEF4444)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

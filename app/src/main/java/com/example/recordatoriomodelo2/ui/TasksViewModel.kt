@@ -74,7 +74,13 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
     val tasks: Flow<List<TaskEntity>> = _currentUserId.flatMapLatest { userId ->
         if (userId != null) {
             Log.d("TasksViewModel", "Cargando tareas para usuario: $userId")
-            taskRepository.getTasksForCurrentUser()
+            taskRepository.getTasksForCurrentUser().map { taskList ->
+                Log.d("TasksViewModel", "Tareas obtenidas del repositorio: ${taskList.size} tareas")
+                taskList.forEach { task ->
+                    Log.d("TasksViewModel", "Tarea: ${task.title} - Usuario: ${task.userId}")
+                }
+                taskList
+            }
         } else {
             Log.d("TasksViewModel", "No hay usuario autenticado, retornando lista vacía")
             flowOf(emptyList())
@@ -160,7 +166,7 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun insertTask(title: String, subject: String, reminderAt: String?) {
+    fun insertTask(title: String, subject: String, description: String, dueDate: String, reminderAt: String?) {
         viewModelScope.launch {
             val userId = _currentUserId.value
             Log.d("TasksViewModel", "=== INICIO insertTask ===")
@@ -177,7 +183,8 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
                 val task = TaskEntity(
                     title = title, 
                     subject = subject, 
-                    dueDate = "", 
+                    description = description,
+                    dueDate = dueDate, 
                     createdAt = now, 
                     reminderAt = reminderAt,
                     userId = userId
@@ -222,6 +229,7 @@ class TasksViewModel(app: Application) : AndroidViewModel(app) {
                 val task = TaskEntity(
                     title = title, 
                     subject = subject, 
+                    description = "", // Las tareas de Classroom no tienen descripción por defecto
                     dueDate = dueDate, 
                     createdAt = now, 
                     reminderAt = reminderAt,

@@ -8,6 +8,7 @@ import android.net.NetworkRequest
 import android.util.Log
 import com.example.recordatoriomodelo2.data.local.TaskEntity
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.MetadataChanges
@@ -189,45 +190,26 @@ class SyncManager private constructor(
                         Log.d(TAG, "  🔍 IDs eliminados: $recentDeletions")
                         
                         val remoteTasks = snapshot.documents.mapNotNull { doc ->
-                            try {
-                                val taskEntity = doc.toObject(TaskEntity::class.java)
-                                if (taskEntity != null) {
-                                    // Manejar ID del documento
-                                    val taskId = when {
-                                        doc.contains("id") && doc.get("id") != null -> {
-                                            when (val idValue = doc.get("id")) {
-                                                is Long -> idValue.toInt()
-                                                is Int -> idValue
-                                                is String -> idValue.toIntOrNull() ?: taskEntity.id
-                                                else -> taskEntity.id
-                                            }
-                                        }
-                                        else -> taskEntity.id
+                            // Usar conversión manual para manejar correctamente todos los campos
+                            val taskEntity = documentToTaskEntity(doc)
+                            if (taskEntity != null) {
+                                // 🎯 FILTRO INTELIGENTE: Excluir tareas eliminadas recientemente
+                                if (recentDeletions.contains(taskEntity.id)) {
+                                    val deletionTime = synchronized(this@SyncManager.recentDeletions) {
+                                        this@SyncManager.recentDeletions[taskEntity.id] ?: 0L
                                     }
-                                    
-                                    val finalTask = taskEntity.copy(id = taskId)
-                                    
-                                    // 🎯 FILTRO INTELIGENTE: Excluir tareas eliminadas recientemente
-                                    if (recentDeletions.contains(taskId)) {
-                                        val deletionTime = synchronized(this@SyncManager.recentDeletions) {
-                                            this@SyncManager.recentDeletions[taskId] ?: 0L
-                                        }
-                                        Log.w(TAG, "🚫 FILTRO APLICADO:")
-                                        Log.w(TAG, "  📝 TaskID: $taskId")
-                                        Log.w(TAG, "  🏷️ Título: ${taskEntity.title}")
-                                        Log.w(TAG, "  ⏰ Eliminada en: $deletionTime")
-                                        Log.w(TAG, "  🕒 Tiempo transcurrido: ${currentTime - deletionTime}ms")
-                                        Log.w(TAG, "  ✅ Tarea filtrada exitosamente")
-                                        null
-                                    } else {
-                                        Log.d(TAG, "✅ Tarea procesada: ID=$taskId, título='${taskEntity.title}'")
-                                        finalTask
-                                    }
-                                } else {
+                                    Log.w(TAG, "🚫 FILTRO APLICADO:")
+                                    Log.w(TAG, "  📝 TaskID: ${taskEntity.id}")
+                                    Log.w(TAG, "  🏷️ Título: ${taskEntity.title}")
+                                    Log.w(TAG, "  ⏰ Eliminada en: $deletionTime")
+                                    Log.w(TAG, "  🕒 Tiempo transcurrido: ${currentTime - deletionTime}ms")
+                                    Log.w(TAG, "  ✅ Tarea filtrada exitosamente")
                                     null
+                                } else {
+                                    Log.d(TAG, "✅ Tarea procesada: ID=${taskEntity.id}, título='${taskEntity.title}', dueDate='${taskEntity.dueDate}'")
+                                    taskEntity
                                 }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error convirtiendo documento: ${e.message}", e)
+                            } else {
                                 null
                             }
                         }
@@ -430,6 +412,35 @@ class SyncManager private constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error resolviendo conflicto manualmente", e)
             false
+        }
+    }
+    
+    /**
+     * Convierte un documento de Firestore a TaskEntity de forma manual
+     * Esto asegura que todos los campos se manejen correctamente, incluyendo dueDate
+     */
+    private fun documentToTaskEntity(doc: DocumentSnapshot): TaskEntity? {
+        return try {
+            TaskEntity(
+                id = when (val idValue = doc.get("id")) {
+                    is Long -> idValue.toInt()
+                    is Int -> idValue
+                    is String -> idValue.toIntOrNull() ?: 0
+                    else -> 0
+                },
+                title = doc.getString("title") ?: "",
+                subject = doc.getString("subject") ?: "",
+                description = doc.getString("description") ?: "", // Manejo explícito del description
+                dueDate = doc.getString("dueDate") ?: "", // Manejo explícito del dueDate
+                isCompleted = doc.getBoolean("isCompleted") ?: false,
+                createdAt = doc.getString("createdAt") ?: "",
+                reminderAt = doc.getString("reminderAt"),
+                classroomId = doc.getString("classroomId"),
+                userId = doc.getString("userId")
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error convirtiendo documento a TaskEntity: ${e.message}", e)
+            null
         }
     }
     
